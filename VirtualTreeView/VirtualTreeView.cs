@@ -1,0 +1,1832 @@
+﻿using System;
+using System.Windows.Forms;
+using System.Drawing;
+using System.ComponentModel;
+
+
+namespace VirtualTreeView
+{
+
+  
+    public delegate void GetNodeCellText(VirtualTreeView tree, VirtualTreeNode node, int column, out string cellText);
+    public delegate void NodeNewText(VirtualTreeView tree, VirtualTreeNode node, int column,  string cellText);
+    public delegate void HeaderClick(VirtualTreeView tree, int column);
+    public delegate void CompareNode(VirtualTreeView tree, VirtualTreeNode node1,VirtualTreeNode node2, int column, out int result);
+    public delegate void NodeDoubleClick(VirtualTreeView tree, VirtualTreeNode node, int column);
+    public delegate void NodeExpanded(VirtualTreeView tree, VirtualTreeNode node);
+    public delegate void NodePaintText(VirtualTreeView tree, VirtualTreeNode node, int column, ref Font font, ref SolidBrush brush);
+    public delegate void OnGetImageIndex(VirtualTreeView tree, VirtualTreeNode node, int column, out int index);
+    public delegate void OnDrawCell(VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, RectangleF rect, out bool handled);
+
+
+
+
+    public class VirtualTreeView : UserControl
+    {
+
+
+        private TreeOptionsHelper options = new TreeOptionsHelper();
+
+
+
+
+        private VirtualTreeNode FFirstNode = null;
+        private VirtualTreeNode FLastNode = null;
+
+        private VirtualTreeHeader FHeader;
+        private bool FUpdating = false;
+
+        private Bitmap bitMap;
+        private Graphics gr;
+
+        private int totalNodeHeight = 0;
+
+        private int FTotalNodes = 0;
+        private VirtualTreeNode FRootNode;
+
+        private RectangleNode firstRectangleNode = null, lastRectangleNode = null;
+
+
+        public event GetNodeCellText OnGetNodeCellText = null;
+
+        public event NodeNewText OnNodeNewText = null;
+        public event HeaderClick OnHeaderClick = null;
+        public event CompareNode OnCompareNode = null;
+        public event NodeDoubleClick OnNodeDoubleClick = null;
+        public event NodeExpanded OnNodeExpanded = null;
+        public event NodePaintText OnPaintText = null;
+        public event OnGetImageIndex GetImageIndex = null;
+        public event OnDrawCell DrawCell = null;
+
+
+        public int editDelay = 5000;
+        private Timer editTimer = new Timer();
+
+        [Category("Data")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
+        public VirtualTreeHeader Header { get { return FHeader; } set
+            {
+                FHeader = value;
+            } }
+
+       
+
+        private int FResizedColumn = -1;
+
+
+        private Color lineColor = Color.Silver;
+
+
+        private float lineWidth = 1;
+
+
+        public Color FBack2Color = Color.FromArgb(0xE5, 0xE5, 0xE5);
+
+        private ImageList FImageList;
+        [Category("Appearance")]
+        public ImageList imageList
+        {
+            get { if (FImageList == null) { FImageList = new ImageList(); } return FImageList; }
+            set { FImageList = value; }
+        }
+
+        [Category("Appearance")]
+        public Color Back2Color
+        {
+            get { return FBack2Color; }
+            set { FBack2Color = value; }
+
+        }
+
+      
+
+      
+
+
+        [Category("Behavior")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
+        public TreeOptionsHelper Options { get => options; set => options = value; }
+
+        [Category("Appearance")]
+        public Color LineColor { get => lineColor; set => lineColor = value; }
+        [Category("Appearance")]
+        public float LineWidth { get => lineWidth; set => lineWidth = value; }
+
+        public Color SelectedRowColor = Color.LightBlue;
+
+        private ScrollBar vertScroll;
+        private ScrollBar horzScroll;
+        private Brush brushBackColor;
+        private Brush brushSelectedRowColor;
+
+        private Selected FFirstSelected;
+        private int FSelectedCount = 0;
+        private SolidBrush brushSelectedColumnColor;
+        private Color SelectedColumnColor=Color.White;
+
+        Image[] FImageCash;
+
+       
+        public VirtualTreeView()
+        {
+
+            if (FHeader == null)
+                FHeader = new VirtualTreeHeader();
+
+            ScrollBar v = new VScrollBar();
+            v.Dock = DockStyle.Right;
+            this.Controls.Add(v);
+            vertScroll = v;            
+            v.ValueChanged += V_Changed;
+            v.Visible = false;
+                      
+            v = new HScrollBar();
+            v.Dock = DockStyle.Bottom;
+            this.Controls.Add(v);
+           
+            horzScroll = v;
+            v.Visible = false;            
+            v.ValueChanged += H_Changed;
+            //PaintOptions = PaintOption.toShowButtons;
+            FRootNode = new VirtualTreeNode(this);
+            brushBackColor = new SolidBrush(BackColor);
+            brushSelectedRowColor = new SolidBrush(SelectedRowColor);
+            brushSelectedColumnColor = new SolidBrush(SelectedColumnColor);
+
+            
+
+            if(imageList!=null)
+            {
+
+                BuildImageCash();
+
+            }
+
+
+
+            
+         }
+
+
+       
+
+        private void BuildImageCash()
+        {
+            if(imageList!=null)
+            {
+                
+
+                if( (FImageCash==null) || (FImageCash.Length!=imageList.Images.Count))
+                {
+
+                    FImageCash = new Image[imageList.Images.Count];
+                    for (int i = 0; i < imageList.Images.Count; i++)
+                    {
+                        FImageCash[i] = new Bitmap(imageList.Images[i]);
+
+                    }
+
+
+                }
+
+
+            }
+
+
+
+        }
+
+
+        private void H_Changed(object sender, EventArgs e)
+        {
+            ReDrawTree();
+        }
+
+        private void V_Changed(object sender, EventArgs e)
+        {
+            ReDrawTree();
+        }
+
+      
+
+        int getNodeTotalHeight(VirtualTreeNode node)
+        {
+            int result = 0;
+
+            if(isNodeVisible(node))
+            {
+                result += node.nodeHeight;
+                VirtualTreeNode child = node.firstChild;
+                if ((child != null) && ((node.state & NodeState.vsExpanded) > 0))
+                 while (child != null)
+                {
+                    result += getNodeTotalHeight(child);
+                    child = child.nextSibling;
+                        
+                }
+
+
+
+            }
+
+            return result;
+        }
+        bool isNodeVisible(VirtualTreeNode node)
+        {
+            
+            if (node.level == 0)
+                return true;
+            else
+            {
+                if ((node.parent.state & NodeState.vsExpanded) == 0)
+                    return false;
+                else
+                    return isNodeVisible(node.parent);
+            }
+        }
+
+
+        public VirtualTreeNode GetFirstSelected()
+        {
+            if (FFirstSelected != null)
+                return FFirstSelected.node;
+            else
+                return null;
+
+
+
+
+        }
+        Selected AddToSelected(VirtualTreeNode node)
+        {
+            if(FFirstSelected==null)
+            {
+                FFirstSelected = new Selected();
+                FFirstSelected.node = node;
+                FSelectedCount++;
+                return FFirstSelected;
+            }
+            else
+            {
+                var s = FFirstSelected;
+                Selected l=null;
+                while(s!=null)
+                {
+                    l = s;
+                    if (s.node == node) return s;
+                    s = s.next;
+                }
+
+                l.next = new Selected();
+                l.next.node = node;
+                FSelectedCount++;
+                return l.next;
+            }
+        }
+
+
+        void RemoveFromSelected(VirtualTreeNode node)
+        {
+            if (node == null) return;
+            var n = FFirstSelected;
+            Selected l = null;
+            while (n!=null)
+            {
+                if(n.node==node)
+                {
+                   if(l!=null)
+                   {
+                        l.next = n.next;
+                   }
+                    if (n == FFirstSelected)
+                        FFirstSelected = n.next;
+                    FSelectedCount--;
+                    return;  
+
+                }
+                l = n;
+                n = n.next;
+            }
+
+
+
+        }
+
+        public void DeleteChildren(VirtualTreeNode node)
+        {
+
+            if ((node == null) || (node.childCount<=0) ) return;
+            bool prevUpdate = FUpdating;
+            try
+            {
+                if (!prevUpdate)
+                    BeginUpdate();
+                var n = node.firstChild;
+
+                while (n!=null)
+                {
+                    var n_cur = n;
+                    n = n_cur.nextSibling;
+                    DeleteNode(n_cur);
+                }
+            }
+           finally
+           {
+                if (!prevUpdate)
+                    EndUpdate();
+            }
+        }
+
+
+        public void DeleteNode(VirtualTreeNode node,bool rebuildIndex=true)
+        {
+            if (node == null)
+                return;
+            bool prevUpdate = FUpdating;
+            try
+            {
+                if (!prevUpdate)
+                    BeginUpdate();
+                if(isNodeVisible(node))
+                {
+                    int h = getNodeTotalHeight(node);
+                   
+                    totalNodeHeight -= h;
+
+                }
+                if (node.prevSibling != null)
+                    node.prevSibling.nextSibling = node.nextSibling;
+                else
+                if ((node.parent != null) && (node.level > 0))
+                {
+                    node.parent.FChildCount--;
+                    if (node == node.parent.firstChild)
+                        node.parent.firstChild = node.nextSibling;
+                    else
+                        if (node == node.parent.lastChild)
+                        node.parent.lastChild = node;
+                }
+                if (node == FFirstNode)
+                    FFirstNode = node.nextSibling;
+                else
+                    if (node == FLastNode)
+                    FLastNode = node;
+             
+             if(rebuildIndex)
+                {
+                    VirtualTreeNode n;
+                    if (node.level == 0)
+                        n = FFirstNode;
+                    else
+                        n=node.parent.firstChild;
+                    RebuildIndex(n);
+
+
+                }
+                RemoveFromSelected(node); 
+
+            }
+            finally
+            {
+                if (!prevUpdate)
+                    EndUpdate();
+
+            }
+
+            RedrawVertScroll();
+
+
+            if (!FUpdating) ReDrawTree();
+
+            
+
+        }
+        public VirtualTreeNode InsertNode(VirtualTreeNode node, NodeAttachMode mode, object data, bool rebuildIndex=true)
+        {
+            VirtualTreeNode newNode = new VirtualTreeNode(data);
+            newNode.FLevel = 0;
+            FTotalNodes++;
+
+            if ((node == null) && (mode == NodeAttachMode.amAddChildLast))
+                mode = NodeAttachMode.amInsertAfter;
+
+            
+            if((mode==NodeAttachMode.amInsertAfter)||(mode==NodeAttachMode.amInsertBefore))
+            {
+                if (node == null)
+                {
+                    if (FFirstNode == null)
+                    {
+                        FFirstNode = newNode;
+                        FLastNode = newNode;
+                      
+                        totalNodeHeight += newNode.nodeHeight;
+
+                    }
+                    else
+                    {
+                        if (mode == NodeAttachMode.amInsertAfter)
+                        {
+                            FLastNode.nextSibling = newNode;
+                            newNode.FIndex = FLastNode.FIndex + 1;
+                            FLastNode = newNode;
+                            
+                            totalNodeHeight += newNode.nodeHeight;
+                        }
+                        else
+                        {
+                            FFirstNode.prevSibling = newNode;
+                            newNode.FIndex = FFirstNode.FIndex;
+                            if(rebuildIndex)
+                                RenumberTree(FFirstNode, newNode.FIndex + 1);
+                            FFirstNode = newNode;
+                            
+                            totalNodeHeight += newNode.nodeHeight;
+
+                        }
+                    }
+                    newNode.FParent = FRootNode;
+                }
+                else
+                {
+                    newNode.FLevel = node.FLevel;
+                    if (newNode.FLevel == 0)
+                        newNode.FParent = FRootNode;
+                    if (mode == NodeAttachMode.amInsertAfter)
+                    {
+                        newNode.nextSibling = node.nextSibling;
+                        node.nextSibling = newNode;
+                        newNode.prevSibling = node;
+                        if (rebuildIndex)
+                            RenumberTree(newNode, node.FIndex + 1);
+                        if (FLastNode==node)
+                            FLastNode = newNode;
+                        
+                        if(isNodeVisible(newNode))
+                            totalNodeHeight += newNode.nodeHeight;
+                    }
+                    else
+                    {
+                        newNode.prevSibling = node.prevSibling;
+                        newNode.nextSibling = node;
+                        newNode.FIndex = node.FIndex;
+                        node.prevSibling = newNode;
+                        if (rebuildIndex)
+                            RenumberTree(node,newNode.FIndex+1);
+                        if (FFirstNode==node)
+                            FFirstNode = newNode;
+                       
+                        if (isNodeVisible(newNode))
+                            totalNodeHeight += newNode.nodeHeight;
+                    }
+
+
+                }
+            }
+            else
+            if((mode==NodeAttachMode.amAddChildFirst)||(mode==NodeAttachMode.amAddChildLast))
+            {
+
+                if(node!=null)
+                {
+                    if(node.firstChild!=null)
+                    {
+                        if(mode == NodeAttachMode.amAddChildFirst)
+                        {
+                            node.firstChild.prevSibling = newNode;
+                            newNode.nextSibling = node.firstChild;
+                            newNode.FLevel = node.FLevel + 1;
+                            if (rebuildIndex)
+                                RenumberTree(node.firstChild, node.firstChild.FIndex + 1);
+                            node.firstChild = newNode;
+                            node.FChildCount++;
+                            newNode.FParent = node;
+                            
+                            
+                            if (isNodeVisible(newNode))
+                                totalNodeHeight += newNode.nodeHeight;
+                        }
+                        else
+                        {
+                            node.lastChild.nextSibling = newNode;
+                            newNode.FLevel = node.FLevel + 1;
+                            newNode.FIndex = node.lastChild.FIndex + 1;
+                            newNode.prevSibling = node.lastChild;
+                            node.lastChild = newNode;
+                            newNode.FParent = node;
+                           
+                            node.FChildCount++;
+                            
+                            if (isNodeVisible(newNode))
+                                totalNodeHeight += newNode.nodeHeight;
+                        }
+
+
+
+
+
+                    }
+                    else
+                    {
+                        node.FChildCount = 1;
+                        node.firstChild = newNode;
+                        newNode.FLevel = node.FLevel + 1;
+                        node.firstChild = newNode;
+                        node.lastChild = newNode;
+                        newNode.FParent = node;
+                        
+                        if (isNodeVisible(newNode))
+                            totalNodeHeight += newNode.nodeHeight;
+                    }
+                }
+
+
+
+            }
+
+            
+
+            if (!FUpdating) ReDrawTree();
+
+            return newNode;
+        }
+
+
+
+
+        void RenumberTree(VirtualTreeNode node,int newIndex)
+        {
+            if (node == null) return;
+            node.FIndex = newIndex;
+            if (node.nextSibling == null)
+                return;
+            newIndex++;
+                do
+                {
+                    node = node.nextSibling;
+                    node.FIndex = newIndex;
+                    newIndex++;
+                }
+                while (node.nextSibling != null) ;
+
+
+        }
+
+
+        public void RebuildIndex(VirtualTreeNode node)
+        {
+            if (node == null)
+                RenumberTree(FFirstNode, 1);
+            else
+            {
+                if ((node.FParent != null) && (node.FParent.firstChild!=null))
+                {
+                    RenumberTree(node.FParent.firstChild,1);
+                }
+                else
+                    RebuildIndex(null);
+            }
+        }
+
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+
+            
+            if(bitMap==null)
+                bitMap = new Bitmap(Width, Height);
+            else
+                bitMap = new Bitmap(bitMap,Width, Height);
+            gr = Graphics.FromImage(bitMap);
+
+
+
+
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+
+           
+            
+            ReDrawTree();
+
+
+            if (this.DesignMode)
+            {
+                Pen pen = new Pen(LineColor, LineWidth);
+                RectangleF r = e.Graphics.VisibleClipBounds;
+                r.Width -= 1;
+                r.Height -= 1;
+                e.Graphics.DrawRectangle(pen,r.X,r.Y,r.Width,r.Height);
+
+
+                if(options.Paint.ShowHorzGridLines)
+                {
+                    var y = e.Graphics.VisibleClipBounds.Y+Header.Height;
+                    int i = 0;
+
+                    var b = new SolidBrush(BackColor);
+                    var b2 = new SolidBrush(Back2Color);
+                    var brush=b;
+
+                    while (true)
+                    {
+
+
+                        if (!Options.Paint.Back2Color)
+                            brush = b;
+                        else
+                        if ((i % 2) == 0)
+                            brush = b;
+                        else
+                            brush = b2;
+
+                        e.Graphics.FillRectangle(brush,  e.Graphics.VisibleClipBounds.X + 1,y+1, e.Graphics.VisibleClipBounds.Width - 2, y + VirtualTreeNode.NodeHeightDefault - 1);
+
+                        e.Graphics.DrawLine(new Pen(LineColor, LineWidth), e.Graphics.VisibleClipBounds.X, y, e.Graphics.VisibleClipBounds.Right, y);
+                        
+
+                        y += VirtualTreeNode.NodeHeightDefault;
+                        i++;
+
+                        if (y > e.Graphics.VisibleClipBounds.Bottom) break;
+                    }
+
+
+                    float w = 0;
+
+                    if (Options.Paint.FullVertGridLines)
+                    for (i = 0; i < FHeader.Columns.Count; i++)
+                    {
+                        var r1 = GetColumnRect(i);
+                        
+
+                        RectangleF rf = new RectangleF(r1.X, r1.Y, r1.Width, r1.Height);
+                        w += r1.Width;
+                        e.Graphics.DrawLine(pen, r1.Right, e.Graphics.VisibleClipBounds.Top, r1.Right, e.Graphics.VisibleClipBounds.Bottom);
+
+                        
+
+
+
+
+                    }
+
+
+
+                }
+                else
+                {
+                    if (this.BorderStyle != BorderStyle.None)
+                    {
+                        
+                        e.Graphics.DrawRectangle(new Pen(lineColor, lineWidth), Rectangle.Ceiling(e.Graphics.VisibleClipBounds));
+
+                    }
+
+
+
+                }
+
+
+            }
+
+
+
+        }
+
+        int getChildNodeTotalHeight(VirtualTreeNode node)
+        {
+            int total = 0;
+            VirtualTreeNode n = node.firstChild;
+            while(n!=null)
+            {
+                total += n.nodeHeight;
+                if ((n.childCount > 0) && ((n.state & NodeState.vsExpanded) > 0))
+                    total += getChildNodeTotalHeight(n);
+
+                n = n.nextSibling;
+            }
+
+
+            return total;
+        }
+
+
+        public void ExpandNode(VirtualTreeNode node)
+        {
+            if((node.state & NodeState.vsExpanded)>0)
+            {            
+                totalNodeHeight -= getChildNodeTotalHeight(node);
+                node.state = (node.state^NodeState.vsExpanded);
+            }
+            else
+            {
+                totalNodeHeight += getChildNodeTotalHeight(node);
+                node.state = (node.state | NodeState.vsExpanded);
+            }
+
+        }
+
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+
+            var i = vertScroll.Value + e.Delta;
+
+            if ((i >= vertScroll.Minimum) && (i <= vertScroll.Maximum))
+                vertScroll.Value = i;
+            else
+            if (i <= vertScroll.Minimum)
+                vertScroll.Value = vertScroll.Minimum;
+            else
+            if (i >= vertScroll.Maximum)
+                vertScroll.Value = vertScroll.Maximum;
+
+
+            ReDrawTree();
+
+
+
+
+        }
+
+        private int FLastX=0;
+        private bool FLeftPressed = false;
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+
+            if (e.Button == MouseButtons.Left)
+            {
+                FLeftPressed = true;
+                FResizedColumn=GetColumnIndex(e.X);
+
+                var r=GetColumnRect(FResizedColumn);
+
+                if((FResizedColumn>0) && ( (e.X-r.X)<r.Width/2 ))
+                {
+                    FResizedColumn--;
+                }
+
+
+            }
+
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (e.Button == MouseButtons.Left)
+            {
+                FLeftPressed = false;
+                FResizedColumn = -1;
+                FLastX = 0;
+                this.Cursor = Cursors.Arrow;
+            }
+        }
+
+        private void changeWidthColumn(int index, int dx)
+        {
+            //for(int i=index;i<FHeader.Columns.Count;i++)
+           // {
+                FHeader.Columns[index].Width -= dx;
+                ReDrawTree();
+           // }
+
+        }
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            bool FResize = false;
+
+            int i;
+
+            
+
+            if ((FResizedColumn < 0) || (FResizedColumn >= FHeader.Columns.Count)) return;
+
+            i = FResizedColumn;
+            {
+                var r = GetColumnRect(i);
+                if (e.Y > r.Bottom)
+                {
+                    this.Cursor = Cursors.Arrow;
+                    return;
+                }
+
+                int offsetX = (horzScroll.Visible ? horzScroll.Value : 0);
+                
+                //
+
+
+                {
+                    this.Cursor = Cursors.VSplit;
+                    if (FLeftPressed)
+                    {
+                        int dx = FLastX - e.X;
+
+                        if ((FLastX != 0)&&(dx!=0))
+                        {
+                            changeWidthColumn(i,dx);
+                        }
+
+                            FLastX = e.X;
+                    }
+                    else
+                        FLastX = 0;
+                   
+
+                    FResize = true;
+                    //break;   
+                }
+
+            }
+
+            if (!FResize) { this.Cursor = Cursors.Default; FLastX = 0; }
+
+            base.OnMouseMove(e);
+        }
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+            if (FUpdating) return;
+            int i;
+            var node = GetNodeAt(e.X,e.Y,out i);
+            if ((node != null)&&(OnNodeDoubleClick!=null))
+            {
+                OnNodeDoubleClick(this, node, i);
+            }
+        }
+
+        protected override void OnKeyPress(KeyPressEventArgs e)
+        {
+            base.OnKeyPress(e);
+
+           
+
+        }
+
+        void GetEditNodeAndColumn(out VirtualTreeNode node,out int column)
+        {
+            node = FFirstSelected.node;
+            column = FFirstSelected.column;
+
+        }
+
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            base.OnKeyUp(e);
+
+            if (FUpdating) return;
+
+            if ((e.KeyCode == Keys.F2) || (e.KeyCode == Keys.Return))
+            {
+                if ((FFirstSelected != null) && (FFirstSelected.column >= 0))
+                {
+                    //BeginUpdate();
+                    CreateEditor(FFirstSelected.node, FFirstSelected.column);
+
+                }
+
+
+
+            }
+            else
+            if (e.KeyCode == Keys.PageDown)
+            {
+                vertScroll.Value += vertScroll.LargeChange;
+                V_Changed(vertScroll, EventArgs.Empty);                
+            }    
+            else
+            if (e.KeyCode == Keys.PageUp)
+            {
+                if ((vertScroll.Value - vertScroll.LargeChange) >= 0)
+                {
+                   vertScroll.Value -= vertScroll.LargeChange;
+                   V_Changed(vertScroll, EventArgs.Empty);                    
+                }
+                else
+                {
+                    vertScroll.Value = 0;
+                    V_Changed(vertScroll, EventArgs.Empty);                    
+
+                }
+            }
+
+
+
+
+        }
+
+        protected   void editOnKeyUp(object sender,KeyEventArgs e)
+        {
+            if(e.KeyCode==Keys.Return)
+            {
+                VirtualTreeNode node = null;
+                int column = -1;
+                GetEditNodeAndColumn(out node, out column);
+                string s = (sender as TextBox).Text;
+                NewText(node,column,s);
+
+                this.Controls.Remove((Control)sender);
+                
+
+            }
+            else
+            if(e.KeyCode==Keys.Escape)
+            {
+
+                this.Controls.Remove((Control)sender);
+                EndUpdate();
+                ReDrawTree();
+
+            }
+
+        }
+
+        private void NewText(VirtualTreeNode node, int column, string s)
+        {
+            if (FUpdating) EndUpdate();
+
+            if (OnNodeNewText != null)
+            {
+                OnNodeNewText(this, node,column, s);
+
+                ReDrawTree();
+
+
+            }
+
+
+        }
+
+        private void CreateEditor(VirtualTreeNode node, int column)
+        {
+            if (!options.Misc.Editable) return;
+
+            BeginUpdate();
+            Rectangle r = GetCellRect(node, column);
+            Rectangle rc = GetColumnRect(column);
+            TextBox edit = new TextBox();
+            edit.Top = r.Y;
+            edit.Left = rc.X;
+            edit.Width = rc.Width;
+            edit.Height = r.Height;
+            GetNodeCellText getText;
+            if (OnGetNodeCellText != null)
+                getText = OnGetNodeCellText;
+            else
+                getText = GetText;
+            string s;
+            getText(this, node, column, out s);
+            edit.Text = s;
+            edit.KeyUp += editOnKeyUp;
+            this.Controls.Add(edit);
+            edit.Focus();
+        }
+
+
+        int FEditClickX, FEditClickY;
+       
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+
+            if (e.Button != MouseButtons.Left)
+                return;
+
+            int i;
+            var node = GetNodeAt(e.X, e.Y, out i);
+
+            
+
+
+
+            if((node!=null) && (i==0) && (node.childCount>0) )
+            {
+
+                OnNodeExpanded?.Invoke(this, node);
+
+                ExpandNode(node);
+                ReDrawTree();
+                
+                
+
+            }
+
+            if(node!=null)
+            {
+                RemoveFromSelected(FFirstSelected?.node);
+                var s=AddToSelected(node);
+                if ((s != null) && (i >= 0))
+                    s.column = i;
+                ReDrawTree();
+            }
+
+
+            if(e.Y<=FHeader.Height)
+            {
+                int column = GetColumnIndex(e.X);
+                if((column>=0)&&(OnHeaderClick!=null)&&(this.Cursor!=Cursors.VSplit))               
+                    OnHeaderClick(this, column);
+            }
+
+            if((node!=null)&&(i>=0) )
+            {
+                FEditClickX = e.X;
+                FEditClickY = e.Y;
+                editTimer.Interval = editDelay;
+                editTimer.Tick += EditTimer_Tick;
+                editTimer.Start();
+            }
+
+            if((node!=null) && (node.checkType==CheckType.ctCheckBox) && (i==0) )
+            {
+                if (node.checkState == CheckState.csCheckedNormal)
+                    node.checkState = CheckState.csUncheckedNormal;
+                else
+                    node.checkState = CheckState.csCheckedNormal;
+                ReDrawTree();
+            }
+
+        }
+
+        private void EditTimer_Tick(object sender, EventArgs e)
+        {
+            editTimer.Stop();
+            var point=PointToClient(Cursor.Position);
+            if ((point.X == FEditClickX) && (point.Y == FEditClickY))
+            {
+                FEditClickX++;
+                //BeginUpdate();
+                CreateEditor(FFirstSelected.node, FFirstSelected.column);
+
+            }
+        }
+
+        public VirtualTreeNode GetNodeAt(int X, int Y)
+        {
+            VirtualTreeNode node = null;
+            RectangleNode rn = null;
+            rn = firstRectangleNode;
+            while (rn!=null)
+            {
+                if (rn.isInRect(X, Y)) return rn.node;
+                rn = rn.next;
+            }
+            return node;
+        }
+
+        int GetColumnIndex(int X)
+        {
+            int index = -1;
+
+            int x = 0;
+            for (int i = 0; i < FHeader.Columns.Count; i++)
+            {
+                if ((X >= x) && (X <= x + FHeader.Columns[i].Width))
+                {
+                    index = i;
+                    return index;
+                }
+                x += FHeader.Columns[i].Width;
+
+            }
+                return index;
+        }
+
+        public VirtualTreeNode GetNodeAt(int X, int Y, out int Column)
+        {
+            VirtualTreeNode node = null;
+            Column = -1;
+            node = GetNodeAt(X, Y);
+            if (node == null) return null;
+            int x = 0;
+            for(int i=0;i<FHeader.Columns.Count;i++)
+            {
+                if ((X >= x) && (X <= x + FHeader.Columns[i].Width))
+                {
+                    Column = i;
+                    return node;
+                }
+                x += FHeader.Columns[i].Width;
+            }
+            return node;
+        }
+
+
+        Rectangle GetCellRect(VirtualTreeNode node, int column)
+        {
+            Rectangle r = Rectangle.Empty;
+            if ((node == null) || (column<0) ) return r;
+            RectangleNode rn = null;
+            rn = firstRectangleNode;
+            while (rn != null)
+            {
+                if (rn.node==node)
+                {
+                    var rh = GetColumnRect(column);
+                    r.Y = rn.rect.Y;
+                    r.Height = rn.rect.Height;
+                    r.X = rn.rect.X;
+                    r.Width = rn.rect.Width;
+                    return r;
+                }
+                rn = rn.next;
+            }
+            return r;
+        }
+
+        Rectangle GetColumnRect(int column)
+        {
+            Rectangle r=Rectangle.Empty;
+
+            if(FHeader.Columns.Count>column)
+            {
+                int x = 0;
+                int w=0;
+                for(int i=0;i<=column;i++)
+                {
+                       w = FHeader.Columns[i].Width;
+                       x += w;
+                    
+                      
+
+                }
+                r.X=x-w;
+                r.Y = 0;
+                r.Height = FHeader.Height;
+                r.Width = w;
+
+
+
+            }
+
+
+            return r;
+        }
+
+        private void InitTreeHeaderForPaint(Graphics g)
+        {
+            if (!FHeader.Visible) return;
+            SolidBrush brush = new SolidBrush(FHeader.BackColor);
+            g.FillRectangle(brush, new Rectangle((int)g.VisibleClipBounds.X, (int)g.VisibleClipBounds.Y, (int)g.VisibleClipBounds.Width,  FHeader.Height+1 ));
+        }
+
+        private void DrawHeader(Graphics g)
+        {
+
+            
+
+
+            InitTreeHeaderForPaint(g);
+            int offsetX = (horzScroll.Visible ? horzScroll.Value : 0);
+
+            StringFormat format = new StringFormat();
+            format.LineAlignment = StringAlignment.Center;
+
+            SolidBrush brush = new SolidBrush(FHeader.ForeColor);
+            Pen pen = new Pen(LineColor, LineWidth);
+
+            bool drawVertLine = options.Paint.FullVertGridLines;
+            int w = 0;
+
+            for (int i=0;i<FHeader.Columns.Count;i++)
+            {
+                var r = GetColumnRect(i);
+                r.X -= offsetX;
+                
+                RectangleF rf = new RectangleF(r.X,r.Y,r.Width,r.Height);
+                w += r.Width;
+                if (drawVertLine)
+                {
+                    g.DrawLine(pen, r.Right, g.VisibleClipBounds.Y, r.Right, g.VisibleClipBounds.Bottom);
+
+                }
+
+                if (FHeader.Visible)
+                {
+                    g.DrawLine(pen, r.Left, r.Bottom, r.Right, r.Bottom);
+                    g.DrawLine(pen, r.Left, r.Top, r.Right, r.Top);
+                }
+
+
+                format.Alignment = FHeader.Columns[i].CaptionAlignment;
+                format.LineAlignment = FHeader.Columns[i].LineAlignment;
+
+                if(FHeader.Visible)
+                g.DrawString(FHeader.Columns[i].Name, FHeader.Font,brush, rf,format);
+
+                
+
+
+            }
+            var workWidth = Width - (vertScroll.Visible ? vertScroll.Width : 0);
+            if (w > workWidth)
+            {
+                horzScroll.Visible = true;
+                horzScroll.Maximum = w - workWidth;
+            }
+            else
+            {
+                horzScroll.Visible = false;
+            }
+        }
+
+        public void GetText(VirtualTreeView tree, VirtualTreeNode node, int Column, out string s)
+        {
+           s = "";
+            if (node == null) return;
+            if (node.data == null)
+                s = "Node " + node.FIndex.ToString() + " " + Column.ToString();
+            else
+                s = "unknown";
+
+            return;
+        }
+
+
+        private void InitTreeForPaint(Graphics g)
+        {
+            SolidBrush brush = new SolidBrush(BackColor);
+            g.FillRectangle(brush, new Rectangle((int)g.VisibleClipBounds.X, FHeader.Height + 1, (int)g.VisibleClipBounds.Width,(int)g.VisibleClipBounds.Height- FHeader.Height ));
+        }
+
+
+        private VirtualTreeNode getParentNextSilbling(VirtualTreeNode node)
+        {
+            VirtualTreeNode next = null;
+            if ((node == null) || ((node.level)==0) && (node.nextSibling==null) )  return null;
+            next = node.parent.nextSibling;
+            if (next == null) next=getParentNextSilbling(node.parent);
+            return next;
+        }
+
+        private void DrawTree(Graphics g)
+        {
+
+            int offsetX = (horzScroll.Visible?horzScroll.Value:0);
+
+            StringFormat format = new StringFormat(StringFormatFlags.LineLimit | StringFormatFlags.NoWrap, 1003) { Trimming = StringTrimming.None };
+
+            InitTreeForPaint(g);
+            VirtualTreeNode node;
+            node = FFirstNode;
+            if (node == null)
+                return;
+            SolidBrush brush = new SolidBrush(ForeColor);
+            SolidBrush brush2 = new SolidBrush(Back2Color);
+            Pen pen = new Pen(LineColor, LineWidth);
+
+            GetNodeCellText getText;
+            if (OnGetNodeCellText != null)
+                getText = OnGetNodeCellText;
+            else
+                getText = GetText;
+
+            bool drawHorzLine = options.Paint.ShowHorzGridLines;
+            bool fillBack2 = options.Paint.Back2Color;
+            bool showButtons = options.Paint.ShowButtons;
+            float buttonWidth = 16;
+            if (showButtons)
+            {
+                var size = g.MeasureString("+", Font);
+                buttonWidth = size.Width;
+
+            }
+            else
+                buttonWidth = 0;
+
+
+            string s;
+            bool firstPaint = true;
+            RectangleNode currentRectangleNode = null;
+            for (int i = 0; i < FHeader.Columns.Count; i++)
+            {
+                var r = GetColumnRect(i);
+                r.X -= offsetX;
+                
+                RectangleF rf = new RectangleF(r.X, r.Y, r.Width, r.Height);
+                if ((i == 0) && (showButtons))
+                {
+                    rf.X += buttonWidth;
+                    r.Width -= (int)buttonWidth;
+                }
+                //Pen pen=new Pen()
+                int y = 1;
+                if(FHeader.Visible)
+                    y = FHeader.Height + 1;                
+
+                node = FFirstNode;
+                int topVisibleY = y + vertScroll.Value;
+                int bottomVisibleY = y + topVisibleY + (int)g.VisibleClipBounds.Bottom;
+
+
+
+
+                bool b = false;
+
+                while (node != null)
+                {
+                    b = !b;
+                    if (y >= topVisibleY - node.nodeHeight)
+                    {
+
+
+                        if (firstPaint)
+                        {
+                            firstPaint = false;
+                            if (firstRectangleNode == null)
+                            {
+                                firstRectangleNode = new RectangleNode();
+                                currentRectangleNode = firstRectangleNode;
+                            }
+                            else
+                            {
+                                currentRectangleNode = firstRectangleNode;
+                            }
+                        }
+                        else
+                        if (i == 0)
+                        {
+                            if (currentRectangleNode.next != null)
+                                currentRectangleNode = currentRectangleNode.next;
+                            else
+                            {
+                                currentRectangleNode.next = new RectangleNode();
+                                currentRectangleNode = currentRectangleNode.next;
+
+                            }
+                        }
+
+
+                        if (i == 0)
+                        {
+                            currentRectangleNode.node = node;
+                            currentRectangleNode.rect = new Rectangle((int)g.VisibleClipBounds.X, y - vertScroll.Value, (int)g.VisibleClipBounds.Width, node.nodeHeight);
+
+                        }
+
+
+
+                        if ((fillBack2) && (b) && (i == 0))
+                        {
+                            g.FillRectangle(brush2, new Rectangle((int)g.VisibleClipBounds.X, y - vertScroll.Value, (int)g.VisibleClipBounds.Width, node.nodeHeight));
+                        }
+                        if (drawHorzLine)
+                        {
+                            g.DrawLine(pen, g.VisibleClipBounds.Left, y - vertScroll.Value, g.VisibleClipBounds.Right, y - vertScroll.Value);
+
+                        }
+
+                        if ((node == FFirstSelected?.node) && (i == 0))
+                        {
+                            g.FillRectangle(brushSelectedRowColor, new Rectangle((int)g.VisibleClipBounds.X, y - vertScroll.Value, (int)g.VisibleClipBounds.Width, node.nodeHeight));
+
+                        }
+
+
+
+
+
+                        rf.Y = y - vertScroll.Value;
+                        rf.Height = node.nodeHeight;
+                        getText(this, node, i, out s);
+
+
+                        if ((node == FFirstSelected?.node) && (i == FFirstSelected.column))
+                        {
+                            if ((i == 0) && (showButtons))
+                            {
+                                rf.X -= buttonWidth;
+                                r.Width += (int)buttonWidth;
+                            }
+                            var selRect = rf;
+                            selRect.X++;
+                            selRect.Y++;
+                            selRect.Width--;
+                            selRect.Height--;
+                            g.FillRectangle(brushSelectedColumnColor, selRect);
+
+
+                            if ((i == 0) && (showButtons))
+                            {
+                                rf.X += buttonWidth;
+                                r.Width -= (int)buttonWidth;
+                            }
+
+                        }
+
+                        rf.X += node.level * buttonWidth;
+                        rf.Width -= node.level * buttonWidth;
+
+                        rf = DrawCellText(g, format, node, brush, showButtons, buttonWidth, s, i, rf);
+
+                        rf.X -= node.level * buttonWidth;
+                        rf.Width += node.level * buttonWidth;
+
+
+
+                    }
+
+
+
+
+                    if ((node.childCount == 0) || ((node.state & NodeState.vsExpanded) == 0))
+                    {
+                        var prev = node;
+                        node = node.nextSibling;
+                        if (node != null)
+                            y += node.nodeHeight;
+                        else
+                        {
+                            node = prev;
+                            node = getParentNextSilbling(node);
+                            if (node != null)
+                                y += node.nodeHeight;
+                        }
+                    }
+                    else
+                    {
+                        node = node.firstChild;
+                        y += node.nodeHeight;
+                    }
+
+
+
+                    if (y > bottomVisibleY)
+                    {
+                        if (i == 0)
+                        {
+                            currentRectangleNode.next = null;
+                            lastRectangleNode = currentRectangleNode;
+
+                        }
+
+                        break;
+                    }
+                }
+                drawHorzLine = false;
+                fillBack2 = false;
+
+
+
+
+            }
+
+            RedrawVertScroll();
+
+        }
+
+        private RectangleF DrawCellText(Graphics g, StringFormat format, VirtualTreeNode node, SolidBrush brush, bool showButtons, float buttonWidth, string s, int column, RectangleF rf)
+        {
+            var font = Font;
+            var rfOrig = rf;
+            var sFormat = format;
+
+            var b = brush.Color;
+            try
+            {
+
+                var f = Font;
+
+                if (OnPaintText != null)
+                    OnPaintText(this, node, column, ref f, ref brush);
+
+
+               
+
+                if((GetImageIndex!=null) && (imageList != null))
+                {
+                    BuildImageCash();
+                    int imageIndex = -1;
+                    GetImageIndex(this, node, column, out imageIndex);
+                    if((imageIndex>=0) && (imageIndex<FImageCash.Length) )
+                    {
+                        g.DrawImage(FImageCash[imageIndex], (int)rf.X, (int)rf.Y);
+                        //imageList.Draw(g, (int)rf.X, (int)rf.Y, imageIndex);
+
+                       
+
+                        rf.X += imageList.ImageSize.Width;
+
+
+                    }
+
+                }
+
+                format.LineAlignment = FHeader.Columns[column].LineAlignment;
+                format.Alignment = FHeader.Columns[column].Alignment;
+                rf.Y += 1;
+
+                bool handled = false ;
+
+                if (DrawCell != null)
+                    DrawCell(this, node, column, g, rf, out handled);
+                
+
+                if(!handled)
+                {
+                    if ((column > 0) || (node.checkType == CheckType.ctNone))
+                        g.DrawString(s, f, brush, rf, format);
+                    else
+                    {
+
+                        System.Windows.Forms.VisualStyles.CheckBoxState cs = System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal;
+
+                        if (node.checkState == CheckState.csCheckedNormal)
+                            cs = System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal;
+
+                        CheckBoxRenderer.DrawCheckBox(g, new Point((int)rf.X, (int)rf.Y), cs);
+                        var size = CheckBoxRenderer.GetGlyphSize(g, cs);
+
+                        var rf1 = rf;
+                        rf1.X += size.Width;
+                        g.DrawString(s, f, brush, rf1, format);
+                    }
+                }
+
+
+
+
+                if ((node.childCount > 0) && (column == 0) && (showButtons))
+                {
+                    if ((node.state & NodeState.vsExpanded) == 0)
+                        g.DrawString("+", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
+                    else
+                        g.DrawString("-", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
+                }
+
+                
+
+            }
+            finally
+
+            {
+
+                Font = font;
+                brush.Color = b;
+                rf = rfOrig;
+                format = sFormat;
+            }
+
+
+            return rf;
+        }
+
+        private void RedrawVertScroll()
+        {
+            if ((totalNodeHeight - Height + 37) > 37)
+            {
+                vertScroll.Maximum = totalNodeHeight - Height + 37;
+                if (horzScroll.Visible)
+                    vertScroll.Maximum += horzScroll.Height;
+                vertScroll.Visible = true;
+            }
+            else
+            {
+                vertScroll.Visible = false;
+            }
+        }
+
+
+
+
+        public object GetNodeData(VirtualTreeNode node)
+        {
+            return node.data;
+
+
+        }
+
+        public T GetNodeData<T> (VirtualTreeNode node)
+        {
+            if((node==null)||(node.data==null))
+                return default(T);
+
+            return (T)node.data;
+
+
+        }
+
+
+
+
+
+        private void ReDrawTree()
+        {
+            if (FUpdating) return;
+
+            if (bitMap == null)
+            {
+                bitMap = new Bitmap(Width, Height);
+                gr = Graphics.FromImage(bitMap);
+            }
+
+        
+            
+
+
+
+        gr.FillRectangle(brushBackColor, gr.ClipBounds);
+
+            DrawTree(gr);
+            DrawHeader(gr);
+            var g1 = CreateGraphics();
+            g1.DrawImage(bitMap,0,0);
+        }
+
+        public void BeginUpdate()
+        {
+            FUpdating = true;
+            vertScroll.Enabled = false;
+        }
+        public void EndUpdate()
+        {
+            FUpdating = false;
+            vertScroll.Enabled = true;
+            Invalidate();
+        }
+
+        public VirtualTreeNode GetFirst()
+        {
+            return FFirstNode;
+        }
+
+        public VirtualTreeNode GetLast()
+        {
+            return FLastNode;
+        }
+
+        public VirtualTreeNode GetNextSibling(VirtualTreeNode node)
+        {
+            return node?.nextSibling;
+        }
+
+        public VirtualTreeNode GetNext(VirtualTreeNode node)
+        {
+            if (node.childCount > 0)
+                return node.firstChild;
+            else
+                if ((node.nextSibling == null) && (node.parent != null))
+                return node.parent.nextSibling;
+            else
+                return node.nextSibling;
+        }
+
+
+        public VirtualTreeNode GetPrevSibling(VirtualTreeNode node)
+        {
+            return node?.prevSibling;
+        }
+
+        public int GetTotalNodes()
+        {
+            return FTotalNodes;
+        }
+
+
+
+        VirtualTreeNode IntersectSorted(VirtualTreeNode node1,VirtualTreeNode node2, int column,SortDirection sortDirection, CompareNode compare)
+        {
+            VirtualTreeNode current, n1, n2,first;
+
+            n1 = node1;
+            n2 = node2;
+            int result;
+            int d = sortDirection == SortDirection.sdDescending ? -1 : 1;
+            
+
+            compare(this, n1, n2, column, out result);
+            if (d*result <=0 )
+            {
+                current = n1;
+                n1 = n1.nextSibling;
+            }
+            else
+            {
+                current = n2;
+                n2 = n2.nextSibling;                 
+            }
+            first = current;
+            while((n1!=null) && (n2!=null) )
+            {
+                compare(this, n1, n2, column, out result);
+                if(d*result<=0)
+                {
+                    current.nextSibling = n1;
+                    current = n1;
+                    n1 = n1.nextSibling;
+                }
+                else
+                {
+                    current.nextSibling = n2;
+                    current = n2;
+                    n2 = n2.nextSibling;
+                }
+            }
+
+            if (n1 != null)
+                current.nextSibling = n1;
+            else
+                current.nextSibling = n2;
+            return first;
+
+        }
+
+
+        class SortStackItem
+        {
+            public int level;
+            public VirtualTreeNode node;
+        }
+
+
+
+
+        public void SortTree(int column, SortDirection direction)
+        {
+            int stackSize = 32;
+            SortStackItem[] stack=new SortStackItem[stackSize];
+            for (int i = 0; i < stackSize; i++)
+                stack[i] = new SortStackItem();
+
+            try
+            {
+                BeginUpdate();
+                int stackPos = 0;
+                VirtualTreeNode node = FFirstNode;
+                while (node != null)
+                {
+                    stack[stackPos].level = 1;
+                    stack[stackPos].node = node;
+                    node = node.nextSibling;
+                    stack[stackPos].node.nextSibling = null;
+                    stackPos++;
+                    while ((stackPos > 1) && (stack[stackPos - 1].level == stack[stackPos - 1].level))
+                    {
+                        stack[stackPos - 2].node = IntersectSorted(stack[stackPos - 2].node, stack[stackPos - 1].node, column, direction, OnCompareNode);
+                        stack[stackPos - 2].level++;
+                        stackPos--;
+                    }
+                }
+                while (stackPos > 1)
+                {
+                    stack[stackPos - 2].node = IntersectSorted(stack[stackPos - 2].node, stack[stackPos - 1].node, column, direction, OnCompareNode);
+                    stack[stackPos - 2].level++;
+                    stackPos--;
+                }
+
+                if (stackPos > 0)
+                    FFirstNode = stack[0].node;
+                
+               
+                RebuildIndex(FFirstNode);
+             
+                node = FFirstNode;
+                while (node != null)
+                {
+                    if (node.nextSibling != null) node.nextSibling.prevSibling = node;
+                    node = node.nextSibling;
+                }
+
+            }
+            finally
+            {
+                EndUpdate();
+            }
+
+            ReDrawTree();
+        }
+
+        public void Clear()
+        {
+            FFirstNode = null;
+            FLastNode = null;
+            FTotalNodes = 0;
+            totalNodeHeight = 0;
+            FSelectedCount = 0;
+            FFirstSelected = null;
+            vertScroll.Value = vertScroll.Minimum;
+            horzScroll.Value = horzScroll.Minimum;
+            if (!FUpdating) ReDrawTree();           
+        }
+
+        public VirtualTreeNode GetFirstChild(VirtualTreeNode node)
+        {
+            return node?.firstChild;
+        }
+
+
+    }
+
+    
+
+
+}
