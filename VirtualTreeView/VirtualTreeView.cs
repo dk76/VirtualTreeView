@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 using System.Drawing;
 using System.ComponentModel;
@@ -59,6 +59,8 @@ namespace VirtualTreeView
         public event OnDrawCell DrawCell = null;
 
 
+
+
         public int editDelay = 5000;
         private Timer editTimer = new Timer();
 
@@ -112,6 +114,12 @@ namespace VirtualTreeView
         [Category("Appearance")]
         public float LineWidth { get => lineWidth; set => lineWidth = value; }
 
+        [Category("Appearance")]
+        public ButtonStyle ButtonStyle { get { return buttonStyle; } set  {buttonStyle = value;  buildTreeButtons(); } }
+
+        
+        private ButtonStyle buttonStyle =ButtonStyle.bsRectangle;
+
         public Color SelectedRowColor = Color.LightBlue;
 
         private ScrollBar vertScroll;
@@ -123,6 +131,10 @@ namespace VirtualTreeView
         private int FSelectedCount = 0;
         private SolidBrush brushSelectedColumnColor;
         private Color SelectedColumnColor=Color.White;
+
+        private Bitmap FMinusButton;
+        private Bitmap FPlusButton;
+
 
         Image[] FImageCash;
 
@@ -153,9 +165,16 @@ namespace VirtualTreeView
             brushSelectedRowColor = new SolidBrush(SelectedRowColor);
             brushSelectedColumnColor = new SolidBrush(SelectedColumnColor);
 
+
+            buildTreeButtons();
+
             
 
-            if(imageList!=null)
+
+
+
+
+            if (imageList!=null)
             {
 
                 BuildImageCash();
@@ -167,8 +186,56 @@ namespace VirtualTreeView
             
          }
 
+        private void buildTreeButtons()
+        {
+            //FPlusButton = new Bitmap(VirtualTreeNode.NodeHeightDefault, VirtualTreeNode.NodeHeightDefault);
+            //FMinusButton = new Bitmap(VirtualTreeNode.NodeHeightDefault, VirtualTreeNode.NodeHeightDefault);
 
-       
+
+            FPlusButton = new Bitmap(9, 9);
+            FMinusButton = new Bitmap(9, 9);
+
+
+            Graphics g = Graphics.FromImage(FMinusButton);
+            if (ButtonStyle == ButtonStyle.bsRectangle)
+            {
+                SolidBrush b = new SolidBrush(Color.Black);
+                Pen pen = new Pen(b, 1);
+                g.DrawRectangle(pen, 0, 0, FMinusButton.Width-1, FMinusButton.Height-1);
+                pen.Color = Color.Black;
+                g.DrawLine(pen, 2, FMinusButton.Height / 2, FMinusButton.Width - 3, FMinusButton.Height / 2);               
+            }
+            else
+            {
+                SolidBrush b = new SolidBrush(Color.Black);                
+                Point[] points = { new Point(0, 2), new Point(8, 2), new Point(4, 6) };
+                g.FillPolygon(b,points);
+            }
+
+
+            g = Graphics.FromImage(FPlusButton);
+            if (buttonStyle == ButtonStyle.bsRectangle)
+            {
+                SolidBrush b = new SolidBrush(Color.Black);
+                Pen pen = new Pen(b, 1);
+                g.DrawRectangle(pen, 0, 0, FMinusButton.Width-1, FMinusButton.Height-1);
+                pen.Color = Color.Black;
+                g.DrawLine(pen, 2, FMinusButton.Height / 2, FMinusButton.Width - 2-1, FMinusButton.Height / 2);
+                g.DrawLine(pen, FMinusButton.Width/2, 2, FMinusButton.Width / 2, FMinusButton.Height-3);
+            }
+            else
+            {
+                SolidBrush b = new SolidBrush(Color.Black);                
+                Point[] points = { new Point(2, 0), new Point(6, 4), new Point(2, 8) };
+                g.FillPolygon(b, points);
+            }
+
+
+
+
+
+        }
+
 
         private void BuildImageCash()
         {
@@ -406,10 +473,8 @@ namespace VirtualTreeView
             VirtualTreeNode newNode = new VirtualTreeNode(data);
             newNode.FLevel = 0;
             FTotalNodes++;
-
-            if ((node == null) && (mode == NodeAttachMode.amAddChildLast))
-                mode = NodeAttachMode.amInsertAfter;
-
+           
+            
             
             if((mode==NodeAttachMode.amInsertAfter)||(mode==NodeAttachMode.amInsertBefore))
             {
@@ -1424,12 +1489,19 @@ namespace VirtualTreeView
                         }
 
                         rf.X += node.level * buttonWidth;
+
+                        var fw = rf.Width;
                         rf.Width -= node.level * buttonWidth;
+
+                        if ( (i==0) && (Options.Paint.ShowButtons))
+                            rf.Width -= buttonWidth;
+
 
                         rf = DrawCellText(g, format, node, brush, showButtons, buttonWidth, s, i, rf);
 
                         rf.X -= node.level * buttonWidth;
-                        rf.Width += node.level * buttonWidth;
+                        rf.Width =fw;
+                        
 
 
 
@@ -1558,9 +1630,14 @@ namespace VirtualTreeView
                 if ((node.childCount > 0) && (column == 0) && (showButtons))
                 {
                     if ((node.state & NodeState.vsExpanded) == 0)
-                        g.DrawString("+", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
+                        g.DrawImage(FPlusButton, new PointF(rf.X - buttonWidth+2, rf.Y+3));
+
+                    //g.DrawString("+", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
+
+
                     else
-                        g.DrawString("-", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
+                        g.DrawImage(FMinusButton, new PointF(rf.X - buttonWidth+2, rf.Y+3));
+                    //g.DrawString("-", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
                 }
 
                 
