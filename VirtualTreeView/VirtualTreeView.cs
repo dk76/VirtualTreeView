@@ -141,6 +141,7 @@ namespace VirtualTreeView
        
         public VirtualTreeView()
         {
+            DoubleBuffered = true;
 
             if (FHeader == null)
                 FHeader = new VirtualTreeHeader();
@@ -674,10 +675,10 @@ namespace VirtualTreeView
         {
             base.OnPaint(e);
 
-
+            
            
             
-            ReDrawTree();
+            ReDrawTree(e.Graphics);
 
 
             if (this.DesignMode)
@@ -1696,7 +1697,7 @@ namespace VirtualTreeView
 
 
 
-        private void ReDrawTree()
+        private void ReDrawTree(Graphics g=null)
         {
             if (FUpdating) return;
 
@@ -1711,11 +1712,16 @@ namespace VirtualTreeView
 
 
 
-        gr.FillRectangle(brushBackColor, gr.ClipBounds);
+            gr.FillRectangle(brushBackColor, gr.ClipBounds);
 
             DrawTree(gr);
             DrawHeader(gr);
-            var g1 = CreateGraphics();
+            Graphics g1;
+            if (g == null)
+                g1 = CreateGraphics();
+            else
+                g1 = g;
+
             g1.DrawImage(bitMap,0,0);
         }
 
