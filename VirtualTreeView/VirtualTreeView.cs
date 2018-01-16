@@ -21,13 +21,13 @@ namespace VirtualTreeView
 
 
 
-    public class VirtualTreeView : UserControl
+    public class VirtualTreeView : UserControl, IDisposable
     {
 
 
         private TreeOptionsHelper options = new TreeOptionsHelper();
 
-
+        bool disposed = false;
 
 
         private VirtualTreeNode FFirstNode = null;
@@ -58,8 +58,7 @@ namespace VirtualTreeView
         public event OnGetImageIndex GetImageIndex = null;
         public event OnDrawCell DrawCell = null;
 
-
-
+       
 
         public int editDelay = 5000;
         private Timer editTimer = new Timer();
@@ -139,6 +138,27 @@ namespace VirtualTreeView
         Image[] FImageCash;
 
        
+        public new void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected  override  void Dispose(bool disposing)
+        {
+            if (disposed) return;
+
+            if(disposing)
+            {
+                editTimer.Stop();
+                editTimer.Dispose();
+                base.Dispose(true);
+            }
+
+            disposed = true;
+        }
+
+
         public VirtualTreeView()
         {
             DoubleBuffered = true;
