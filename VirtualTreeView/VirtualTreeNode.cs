@@ -10,7 +10,27 @@ namespace VirtualTreeView
         public int index { get { return FIndex; } }
         public int childCount { get { return FChildCount; } }
         public int level { get { return FLevel; } }
-        public int nodeHeight = NodeHeightDefault;
+
+        int FNodeHeight = NodeHeightDefault;
+
+        public int nodeHeight { set
+            {
+                var old = FNodeHeight;
+                FNodeHeight = value;
+
+               
+                var tree = getNodeTree();
+                if((tree!=null) && (tree.isNodeVisible(this)))
+                {
+                    tree.totalNodeHeight -= old;
+                    tree.totalNodeHeight += FNodeHeight;
+                }
+
+            }
+            get { return FNodeHeight; }
+        }
+
+
 
         internal VirtualTreeNode FParent;
         public VirtualTreeNode parent { get { return FParent; } }
@@ -34,7 +54,7 @@ namespace VirtualTreeView
         }
         public VirtualTreeView getNodeTree()
         {
-            if (FLevel == 0) return (VirtualTreeView)data;
+            if (FLevel == 0) return (VirtualTreeView)FParent.data;
             return FParent.getNodeTree();
         }
 
