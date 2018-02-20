@@ -16,6 +16,7 @@ namespace TestApplication
 
         
         int nodeCount = 100000;
+        int FMode = -1;
 
         public TestForm()
         {
@@ -27,8 +28,8 @@ namespace TestApplication
             VirtualTreeColumn column = null;
             vtItems.GetImageIndex += vtItems_GetImageIndex;
             vtItems.DrawCell += vtItems_DrawCell;
-            
 
+            FMode = 0;
            
 
             vtItems.BeginUpdate();
@@ -71,7 +72,7 @@ namespace TestApplication
         private void vtItems_GetImageIndex(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out int index)
         {
             index = -1;
-            if(column==0)
+            if((column==0) && (FMode==0))
                 index = 0;
 
         }
@@ -83,6 +84,8 @@ namespace TestApplication
 
         private void buttonTest2_Click(object sender, EventArgs e)
         {
+            FMode = 1;
+
             VirtualTreeColumn column = null;
             vtItems.GetImageIndex -= vtItems_GetImageIndex;
             vtItems.DrawCell -= vtItems_DrawCell;
