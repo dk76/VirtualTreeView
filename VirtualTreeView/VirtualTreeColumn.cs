@@ -3,6 +3,7 @@ using System.Drawing;
 using System.ComponentModel;
 using System.Runtime.Serialization;
 using System.Security.Permissions;
+using System.Reflection;
 
 namespace VirtualTreeView
 {
@@ -37,12 +38,25 @@ namespace VirtualTreeView
         public StringAlignment CaptionAlignment { get => FCaptionAlignment; set => FCaptionAlignment = value; }
 
 
+        internal FieldInfo fieldInfo = null;
+
         public VirtualTreeColumn()
         {
 
 
         }
 
+        public VirtualTreeColumn(FieldInfo fi)
+        {
+            fieldInfo = fi;
+
+        }
+
+
+        public void SetFieldInfo(FieldInfo fi)
+        {
+            fieldInfo = fi;
+        }
 
         protected VirtualTreeColumn(
         SerializationInfo info, StreamingContext context)
