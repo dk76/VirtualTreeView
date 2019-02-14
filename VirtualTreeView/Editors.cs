@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -36,7 +36,19 @@ namespace VirtualTreeView
         protected int FColumn = -1;
 
 
-        public void setEdit(Control edit) { FEdit = edit;  }
+        public void setEdit(Control edit)
+        {
+            FEdit = edit;
+
+            FEdit.LostFocus += FEdit_LostFocus;
+
+        }
+
+        private void FEdit_LostFocus(object sender, EventArgs e)
+        {
+            var ke = new KeyEventArgs(Keys.Return);
+            editOnKeyUp(sender, ke);
+        }
 
         public void setText(String s) { FText = s; }
         virtual public string getText() { return FText; }
@@ -87,8 +99,11 @@ namespace VirtualTreeView
             if (e.KeyCode == Keys.Escape)
             {
 
+                getEdit().LostFocus -= FEdit_LostFocus;
                 
                 FTree.RemoveControl(getEdit());
+
+
                 FTree.EndUpdate();
                 FTree.ReDrawTree();
 
