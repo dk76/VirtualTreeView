@@ -1,4 +1,3 @@
-﻿
 namespace VirtualTreeView
 {
     public class VirtualTreeNode
