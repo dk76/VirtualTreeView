@@ -1,26 +1,26 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 using System.Drawing;
 using System.ComponentModel;
-
+using System.Data;
 
 namespace VirtualTreeView
 {
 
-  
+
     public delegate void GetNodeCellText(VirtualTreeView tree, VirtualTreeNode node, int column, out string cellText);
     public delegate void GetNodeHintText(VirtualTreeView tree, VirtualTreeNode node, int column, out string hintText);
-    public delegate void NodeNewText(VirtualTreeView tree, VirtualTreeNode node, int column,  string cellText);
+    public delegate void NodeNewText(VirtualTreeView tree, VirtualTreeNode node, int column, string cellText);
     public delegate void HeaderClick(VirtualTreeView tree, int column);
-    public delegate void CompareNode(VirtualTreeView tree, VirtualTreeNode node1,VirtualTreeNode node2, int column, out int result);
+    public delegate void CompareNode(VirtualTreeView tree, VirtualTreeNode node1, VirtualTreeNode node2, int column, out int result);
     public delegate void NodeDoubleClick(VirtualTreeView tree, VirtualTreeNode node, int column);
     public delegate void NodeExpanded(VirtualTreeView tree, VirtualTreeNode node);
     public delegate void NodePaintText(VirtualTreeView tree, VirtualTreeNode node, int column, ref Font font, ref SolidBrush brush);
     public delegate void OnGetImageIndex(VirtualTreeView tree, VirtualTreeNode node, int column, out int index);
     public delegate void OnDrawCell(VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, RectangleF rect, out bool handled);
-    public delegate void OnCreateEditor(VirtualTreeView tree, VirtualTreeNode node, int column,out IEditor edit);
+    public delegate void OnCreateEditor(VirtualTreeView tree, VirtualTreeNode node, int column, out IEditor edit);
     public delegate void CellEditing(VirtualTreeView tree, VirtualTreeNode node, int column, out bool enable);
-
+    public delegate void OnDrawText(VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, string text, Font font, Brush brush, RectangleF rect, StringFormat format, out bool handled);
 
 
     public class VirtualTreeView : UserControl, IDisposable
@@ -32,7 +32,7 @@ namespace VirtualTreeView
         bool disposed = false;
 
 
-        private IEditor FEdit=null;
+        private IEditor FEdit = null;
 
         private VirtualTreeNode FFirstNode = null;
         private VirtualTreeNode FLastNode = null;
@@ -64,13 +64,18 @@ namespace VirtualTreeView
         public event OnCreateEditor CreateEditor = null;
         public event CellEditing Editing = null;
         public event GetNodeHintText OnGetNodeHintText = null;
+        public event OnDrawText NodeDrawText = null;
 
-       
 
         public int editDelay = 50;
         private Timer editTimer = new Timer();
 
         private Timer hintTimer = new Timer();
+
+
+
+
+
 
         [Category("Data")]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
@@ -79,7 +84,7 @@ namespace VirtualTreeView
                 FHeader = value;
             } }
 
-       
+
 
         private int FResizedColumn = -1;
 
@@ -108,9 +113,9 @@ namespace VirtualTreeView
 
         }
 
-      
 
-      
+
+
 
 
         [Category("Behavior")]
@@ -123,7 +128,7 @@ namespace VirtualTreeView
         public float LineWidth { get => lineWidth; set => lineWidth = value; }
 
         [Category("Appearance")]
-        public ButtonStyle ButtonStyle { get { return buttonStyle; } set  {buttonStyle = value;  buildTreeButtons(); } }
+        public ButtonStyle ButtonStyle { get { return buttonStyle; } set { buttonStyle = value; buildTreeButtons(); } }
 
         [Category("Appearance")]
         public Boolean ShowHint
@@ -149,8 +154,8 @@ namespace VirtualTreeView
 
         }
 
-        
-        private ButtonStyle buttonStyle =ButtonStyle.bsRectangle;
+
+        private ButtonStyle buttonStyle = ButtonStyle.bsRectangle;
 
         public Color SelectedRowColor = Color.LightBlue;
 
@@ -159,10 +164,11 @@ namespace VirtualTreeView
         private Brush brushBackColor;
         private Brush brushSelectedRowColor;
 
-        private Selected FFirstSelected;
+        private SelectedContainer FFirstSelected;
+        private SelectedContainer FLastSelected;
         private int FSelectedCount = 0;
         private SolidBrush brushSelectedColumnColor;
-        private Color SelectedColumnColor=Color.White;
+        private Color SelectedColumnColor = Color.White;
 
         private Bitmap FMinusButton;
         private Bitmap FPlusButton;
@@ -171,18 +177,21 @@ namespace VirtualTreeView
 
         Image[] FImageCash;
 
-       
+        public SelectedHelper Selected { get; }
+
+        public ExpandedHelper Expanded { get; }
+
         public new void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
-        protected  override  void Dispose(bool disposing)
+        protected override void Dispose(bool disposing)
         {
             if (disposed) return;
 
-            if(disposing)
+            if (disposing)
             {
                 editTimer.Stop();
                 editTimer.Dispose();
@@ -205,16 +214,16 @@ namespace VirtualTreeView
             ScrollBar v = new VScrollBar();
             v.Dock = DockStyle.Right;
             this.Controls.Add(v);
-            vertScroll = v;            
+            vertScroll = v;
             v.ValueChanged += V_Changed;
             v.Visible = false;
-                      
+
             v = new HScrollBar();
             v.Dock = DockStyle.Bottom;
             this.Controls.Add(v);
-           
+
             horzScroll = v;
-            v.Visible = false;            
+            v.Visible = false;
             v.ValueChanged += H_Changed;
             //PaintOptions = PaintOption.toShowButtons;
             FRootNode = new VirtualTreeNode(this);
@@ -225,52 +234,65 @@ namespace VirtualTreeView
 
             buildTreeButtons();
 
-            
 
 
 
 
 
-            if (imageList!=null)
+
+            if (imageList != null)
             {
 
                 BuildImageCash();
 
             }
 
+
+            Selected = new SelectedHelper(this);
+            Expanded = new ExpandedHelper(this);
+
             hintTimer.Interval = 100;
             hintTimer.Tick += HintTimer_Tick;
 
 
+       
+
+
             //hintTimer.Start();
-            
-            
-         }
+
+
+        }
+
+       
 
         Point lastPoint = new Point(0, 0);
         DateTime lastMouseTime;
-        ToolTip toolTip =new ToolTip();
+        ToolTip toolTip = new ToolTip();
         string lastToolTipText = "";
+
+
+
+
 
         private void HintTimer_Tick(object sender, EventArgs e)
         {
-            if ( (!FShowHint) || (FUpdating) ) return;
+            if ((!FShowHint) || (FUpdating)) return;
 
-            if(lastPoint!=Cursor.Position)
+            if (lastPoint != Cursor.Position)
             {
                 lastPoint = Cursor.Position;
                 lastMouseTime = DateTime.Now;
                 lastToolTipText = "";
-                
-                
+
+
             }
             else
             {
-                if(lastMouseTime.AddSeconds(1)>=DateTime.Now)
+                if (lastMouseTime.AddSeconds(1) >= DateTime.Now)
                 {
 
-                    var p=this.PointToClient(lastPoint);
-                    var node=GetNodeAt(p.X, p.Y);
+                    var p = this.PointToClient(lastPoint);
+                    var node = GetNodeAt(p.X, p.Y);
                     if (node != null)
                     {
 
@@ -278,11 +300,11 @@ namespace VirtualTreeView
                         if (column >= 0)
                         {
 
-                            if(OnGetNodeHintText!=null)
+                            if (OnGetNodeHintText != null)
                             {
                                 var s = "";
                                 OnGetNodeHintText(this, node, column, out s);
-                                if(s!="")
+                                if (s != "")
                                 {
                                     toolTip.SetToolTip(this, s);
                                     return;
@@ -364,15 +386,15 @@ namespace VirtualTreeView
             {
                 SolidBrush b = new SolidBrush(Color.Black);
                 Pen pen = new Pen(b, 1);
-                g.DrawRectangle(pen, 0, 0, FMinusButton.Width-1, FMinusButton.Height-1);
+                g.DrawRectangle(pen, 0, 0, FMinusButton.Width - 1, FMinusButton.Height - 1);
                 pen.Color = Color.Black;
-                g.DrawLine(pen, 2, FMinusButton.Height / 2, FMinusButton.Width - 3, FMinusButton.Height / 2);               
+                g.DrawLine(pen, 2, FMinusButton.Height / 2, FMinusButton.Width - 3, FMinusButton.Height / 2);
             }
             else
             {
-                SolidBrush b = new SolidBrush(Color.Black);                
+                SolidBrush b = new SolidBrush(Color.Black);
                 Point[] points = { new Point(0, 2), new Point(8, 2), new Point(4, 6) };
-                g.FillPolygon(b,points);
+                g.FillPolygon(b, points);
             }
 
 
@@ -381,14 +403,14 @@ namespace VirtualTreeView
             {
                 SolidBrush b = new SolidBrush(Color.Black);
                 Pen pen = new Pen(b, 1);
-                g.DrawRectangle(pen, 0, 0, FMinusButton.Width-1, FMinusButton.Height-1);
+                g.DrawRectangle(pen, 0, 0, FMinusButton.Width - 1, FMinusButton.Height - 1);
                 pen.Color = Color.Black;
-                g.DrawLine(pen, 2, FMinusButton.Height / 2, FMinusButton.Width - 2-1, FMinusButton.Height / 2);
-                g.DrawLine(pen, FMinusButton.Width/2, 2, FMinusButton.Width / 2, FMinusButton.Height-3);
+                g.DrawLine(pen, 2, FMinusButton.Height / 2, FMinusButton.Width - 2 - 1, FMinusButton.Height / 2);
+                g.DrawLine(pen, FMinusButton.Width / 2, 2, FMinusButton.Width / 2, FMinusButton.Height - 3);
             }
             else
             {
-                SolidBrush b = new SolidBrush(Color.Black);                
+                SolidBrush b = new SolidBrush(Color.Black);
                 Point[] points = { new Point(2, 0), new Point(6, 4), new Point(2, 8) };
                 g.FillPolygon(b, points);
             }
@@ -402,11 +424,11 @@ namespace VirtualTreeView
 
         private void BuildImageCash()
         {
-            if(imageList!=null)
+            if (imageList != null)
             {
-                
 
-                if( (FImageCash==null) || (FImageCash.Length!=imageList.Images.Count))
+
+                if ((FImageCash == null) || (FImageCash.Length != imageList.Images.Count))
                 {
 
                     FImageCash = new Image[imageList.Images.Count];
@@ -437,23 +459,23 @@ namespace VirtualTreeView
             ReDrawTree();
         }
 
-      
+
 
         int getNodeTotalHeight(VirtualTreeNode node)
         {
             int result = 0;
 
-            if(isNodeVisible(node))
+            if (isNodeVisible(node))
             {
                 result += node.nodeHeight;
                 VirtualTreeNode child = node.firstChild;
                 if ((child != null) && ((node.state & NodeState.vsExpanded) > 0))
-                 while (child != null)
-                {
-                    result += getNodeTotalHeight(child);
-                    child = child.nextSibling;
-                        
-                }
+                    while (child != null)
+                    {
+                        result += getNodeTotalHeight(child);
+                        child = child.nextSibling;
+
+                    }
 
 
 
@@ -463,7 +485,7 @@ namespace VirtualTreeView
         }
         internal bool isNodeVisible(VirtualTreeNode node)
         {
-            
+
             if (node.level == 0)
                 return true;
             else
@@ -487,51 +509,159 @@ namespace VirtualTreeView
 
 
         }
-        Selected AddToSelected(VirtualTreeNode node)
+
+
+
+
+        internal bool isSelected(VirtualTreeNode node)
         {
-            if(FFirstSelected==null)
+
+            var s = FFirstSelected;
+
+            while (s != null)
             {
-                FFirstSelected = new Selected();
+
+                if (s.node == node) return true;
+                s = s.next;
+
+            }
+
+
+            return false;
+        }
+
+
+        internal void ClearSelected()
+        {
+            FFirstSelected = null;
+            FLastSelected = null;
+            FSelectedCount = 0;
+
+        }
+
+
+        internal int CompareNodePosition(VirtualTreeNode node1, VirtualTreeNode node2)
+        {
+
+            if (node1.level == node2.level)
+                return (node1.FIndex - node2.FIndex);
+            else
+                if (node1.level > node2.level)
+            {
+                while (node2.level != node1.level)
+                {
+                    node1 = node1.parent;
+                }
+                return (node1.FIndex - node2.FIndex);
+
+            }
+            else
+            {
+                while (node2.level != node1.level)
+                {
+                    node2 = node2.parent;
+                }
+                return (node1.FIndex - node2.FIndex);
+            }
+
+        }
+
+
+
+        internal VirtualTreeNode GetMinSelectedNode()
+        {
+            if (FFirstSelected == null) return null;
+            var node = GetFirst();
+            VirtualTreeNode m = null;
+            while (node != null)
+            {
+                if (isSelected(node)) { m = node; return m; };
+
+                node = GetNext(node);
+            }
+            return null;
+
+        }
+
+        internal VirtualTreeNode GetMaxSelectedNode()
+        {
+            if (FFirstSelected == null) return null;
+            var node = GetFirst();
+            VirtualTreeNode m = null;
+            while (node != null)
+            {
+                if (isSelected(node)) m = node;
+
+                node = GetNext(node);
+            }
+            return m;
+
+        }
+
+
+        internal SelectedContainer AddToSelected(VirtualTreeNode node)
+        {
+            if (FFirstSelected == null)
+            {
+                FFirstSelected = new SelectedContainer();
                 FFirstSelected.node = node;
+                FLastSelected = FFirstSelected;
                 FSelectedCount++;
                 return FFirstSelected;
             }
             else
             {
+
+
                 var s = FFirstSelected;
-                Selected l=null;
-                while(s!=null)
+                SelectedContainer l = null;
+                while (s != null)
                 {
                     l = s;
                     if (s.node == node) return s;
                     s = s.next;
                 }
 
-                l.next = new Selected();
+                l.next = new SelectedContainer();
                 l.next.node = node;
                 FSelectedCount++;
+                FLastSelected = l.next;
                 return l.next;
+
+                /*var l = FLastSelected;
+                l.next = new SelectedContainer();
+                l.next.node = node;
+                FSelectedCount++;
+                FLastSelected = l.next;
+                return l.next;*/
+
+
+
             }
         }
 
 
-        void RemoveFromSelected(VirtualTreeNode node)
+        internal void RemoveFromSelected(VirtualTreeNode node)
         {
             if (node == null) return;
             var n = FFirstSelected;
-            Selected l = null;
-            while (n!=null)
+
+            SelectedContainer l = null;
+            while (n != null)
             {
-                if(n.node==node)
+
+                if (n.node == node)
                 {
-                   if(l!=null)
-                   {
+                    if (l != null)
+                    {
                         l.next = n.next;
-                   }
+                    }
                     if (n == FFirstSelected)
                         FFirstSelected = n.next;
+                    else if (n == FLastSelected)
+                        FLastSelected = l;
                     FSelectedCount--;
-                    return;  
+                    return;
 
                 }
                 l = n;
@@ -545,7 +675,7 @@ namespace VirtualTreeView
         public void DeleteChildren(VirtualTreeNode node)
         {
 
-            if ((node == null) || (node.childCount<=0) ) return;
+            if ((node == null) || (node.childCount <= 0)) return;
             bool prevUpdate = FUpdating;
             try
             {
@@ -553,22 +683,22 @@ namespace VirtualTreeView
                     BeginUpdate();
                 var n = node.firstChild;
 
-                while (n!=null)
+                while (n != null)
                 {
                     var n_cur = n;
                     n = n_cur.nextSibling;
                     DeleteNode(n_cur);
                 }
             }
-           finally
-           {
+            finally
+            {
                 if (!prevUpdate)
                     EndUpdate();
             }
         }
 
 
-        public void DeleteNode(VirtualTreeNode node,bool rebuildIndex=true)
+        public void DeleteNode(VirtualTreeNode node, bool rebuildIndex = true)
         {
             if (node == null)
                 return;
@@ -577,10 +707,10 @@ namespace VirtualTreeView
             {
                 if (!prevUpdate)
                     BeginUpdate();
-                if(isNodeVisible(node))
+                if (isNodeVisible(node))
                 {
                     int h = getNodeTotalHeight(node);
-                   
+
                     totalNodeHeight -= h;
 
                 }
@@ -601,19 +731,19 @@ namespace VirtualTreeView
                 else
                     if (node == FLastNode)
                     FLastNode = node;
-             
-             if(rebuildIndex)
+
+                if (rebuildIndex)
                 {
                     VirtualTreeNode n;
                     if (node.level == 0)
                         n = FFirstNode;
                     else
-                        n=node.parent.firstChild;
+                        n = node.parent.firstChild;
                     RebuildIndex(n);
 
 
                 }
-                RemoveFromSelected(node); 
+                RemoveFromSelected(node);
 
             }
             finally
@@ -628,18 +758,18 @@ namespace VirtualTreeView
 
             if (!FUpdating) ReDrawTree();
 
-            
+
 
         }
-        public VirtualTreeNode InsertNode(VirtualTreeNode node, NodeAttachMode mode, object data, bool rebuildIndex=true)
+        public VirtualTreeNode InsertNode(VirtualTreeNode node, NodeAttachMode mode, object data, bool rebuildIndex = true)
         {
             VirtualTreeNode newNode = new VirtualTreeNode(data);
             newNode.FLevel = 0;
             FTotalNodes++;
-           
-            
-            
-            if((mode==NodeAttachMode.amInsertAfter)||(mode==NodeAttachMode.amInsertBefore))
+
+
+
+            if ((mode == NodeAttachMode.amInsertAfter) || (mode == NodeAttachMode.amInsertBefore))
             {
                 if (node == null)
                 {
@@ -647,7 +777,7 @@ namespace VirtualTreeView
                     {
                         FFirstNode = newNode;
                         FLastNode = newNode;
-                      
+
                         totalNodeHeight += newNode.nodeHeight;
 
                     }
@@ -658,17 +788,17 @@ namespace VirtualTreeView
                             FLastNode.nextSibling = newNode;
                             newNode.FIndex = FLastNode.FIndex + 1;
                             FLastNode = newNode;
-                            
+
                             totalNodeHeight += newNode.nodeHeight;
                         }
                         else
                         {
                             FFirstNode.prevSibling = newNode;
                             newNode.FIndex = FFirstNode.FIndex;
-                            if(rebuildIndex)
+                            if (rebuildIndex)
                                 RenumberTree(FFirstNode, newNode.FIndex + 1);
                             FFirstNode = newNode;
-                            
+
                             totalNodeHeight += newNode.nodeHeight;
 
                         }
@@ -687,10 +817,10 @@ namespace VirtualTreeView
                         newNode.prevSibling = node;
                         if (rebuildIndex)
                             RenumberTree(newNode, node.FIndex + 1);
-                        if (FLastNode==node)
+                        if (FLastNode == node)
                             FLastNode = newNode;
-                        
-                        if(isNodeVisible(newNode))
+
+                        if (isNodeVisible(newNode))
                             totalNodeHeight += newNode.nodeHeight;
                     }
                     else
@@ -700,10 +830,10 @@ namespace VirtualTreeView
                         newNode.FIndex = node.FIndex;
                         node.prevSibling = newNode;
                         if (rebuildIndex)
-                            RenumberTree(node,newNode.FIndex+1);
-                        if (FFirstNode==node)
+                            RenumberTree(node, newNode.FIndex + 1);
+                        if (FFirstNode == node)
                             FFirstNode = newNode;
-                       
+
                         if (isNodeVisible(newNode))
                             totalNodeHeight += newNode.nodeHeight;
                     }
@@ -712,14 +842,14 @@ namespace VirtualTreeView
                 }
             }
             else
-            if((mode==NodeAttachMode.amAddChildFirst)||(mode==NodeAttachMode.amAddChildLast))
+            if ((mode == NodeAttachMode.amAddChildFirst) || (mode == NodeAttachMode.amAddChildLast))
             {
 
-                if(node!=null)
+                if (node != null)
                 {
-                    if(node.firstChild!=null)
+                    if (node.firstChild != null)
                     {
-                        if(mode == NodeAttachMode.amAddChildFirst)
+                        if (mode == NodeAttachMode.amAddChildFirst)
                         {
                             node.firstChild.prevSibling = newNode;
                             newNode.nextSibling = node.firstChild;
@@ -729,8 +859,8 @@ namespace VirtualTreeView
                             node.firstChild = newNode;
                             node.FChildCount++;
                             newNode.FParent = node;
-                            
-                            
+
+
                             if (isNodeVisible(newNode))
                                 totalNodeHeight += newNode.nodeHeight;
                         }
@@ -742,9 +872,9 @@ namespace VirtualTreeView
                             newNode.prevSibling = node.lastChild;
                             node.lastChild = newNode;
                             newNode.FParent = node;
-                           
+
                             node.FChildCount++;
-                            
+
                             if (isNodeVisible(newNode))
                                 totalNodeHeight += newNode.nodeHeight;
                         }
@@ -762,7 +892,7 @@ namespace VirtualTreeView
                         node.firstChild = newNode;
                         node.lastChild = newNode;
                         newNode.FParent = node;
-                        
+
                         if (isNodeVisible(newNode))
                             totalNodeHeight += newNode.nodeHeight;
                     }
@@ -772,7 +902,7 @@ namespace VirtualTreeView
 
             }
 
-            
+
 
             if (!FUpdating) ReDrawTree();
 
@@ -782,20 +912,20 @@ namespace VirtualTreeView
 
 
 
-        void RenumberTree(VirtualTreeNode node,int newIndex)
+        void RenumberTree(VirtualTreeNode node, int newIndex)
         {
             if (node == null) return;
             node.FIndex = newIndex;
             if (node.nextSibling == null)
                 return;
             newIndex++;
-                do
-                {
-                    node = node.nextSibling;
-                    node.FIndex = newIndex;
-                    newIndex++;
-                }
-                while (node.nextSibling != null) ;
+            do
+            {
+                node = node.nextSibling;
+                node.FIndex = newIndex;
+                newIndex++;
+            }
+            while (node.nextSibling != null);
 
 
         }
@@ -807,9 +937,9 @@ namespace VirtualTreeView
                 RenumberTree(FFirstNode, 1);
             else
             {
-                if ((node.FParent != null) && (node.FParent.firstChild!=null))
+                if ((node.FParent != null) && (node.FParent.firstChild != null))
                 {
-                    RenumberTree(node.FParent.firstChild,1);
+                    RenumberTree(node.FParent.firstChild, 1);
                 }
                 else
                     RebuildIndex(null);
@@ -821,11 +951,13 @@ namespace VirtualTreeView
         {
             base.OnResize(e);
 
-            
-            if(bitMap==null)
+            if ((Width == 0) || (Height == 0)) return;
+
+
+            if (bitMap == null)
                 bitMap = new Bitmap(Width, Height);
             else
-                bitMap = new Bitmap(bitMap,Width, Height);
+                bitMap = new Bitmap(bitMap, Width, Height);
             gr = Graphics.FromImage(bitMap);
 
 
@@ -837,9 +969,9 @@ namespace VirtualTreeView
         {
             base.OnPaint(e);
 
-            
-           
-            
+
+
+
             ReDrawTree(e.Graphics);
 
 
@@ -849,17 +981,17 @@ namespace VirtualTreeView
                 RectangleF r = e.Graphics.VisibleClipBounds;
                 r.Width -= 1;
                 r.Height -= 1;
-                e.Graphics.DrawRectangle(pen,r.X,r.Y,r.Width,r.Height);
+                e.Graphics.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
 
 
-                if(options.Paint.ShowHorzGridLines)
+                if (options.Paint.ShowHorzGridLines)
                 {
-                    var y = e.Graphics.VisibleClipBounds.Y+Header.Height;
+                    var y = e.Graphics.VisibleClipBounds.Y + Header.Height;
                     int i = 0;
 
                     var b = new SolidBrush(BackColor);
                     var b2 = new SolidBrush(Back2Color);
-                    var brush=b;
+                    var brush = b;
 
                     while (true)
                     {
@@ -873,10 +1005,10 @@ namespace VirtualTreeView
                         else
                             brush = b2;
 
-                        e.Graphics.FillRectangle(brush,  e.Graphics.VisibleClipBounds.X + 1,y+1, e.Graphics.VisibleClipBounds.Width - 2, y + VirtualTreeNode.NodeHeightDefault - 1);
+                        e.Graphics.FillRectangle(brush, e.Graphics.VisibleClipBounds.X + 1, y + 1, e.Graphics.VisibleClipBounds.Width - 2, y + VirtualTreeNode.NodeHeightDefault - 1);
 
                         e.Graphics.DrawLine(new Pen(LineColor, LineWidth), e.Graphics.VisibleClipBounds.X, y, e.Graphics.VisibleClipBounds.Right, y);
-                        
+
 
                         y += VirtualTreeNode.NodeHeightDefault;
                         i++;
@@ -888,21 +1020,21 @@ namespace VirtualTreeView
                     float w = 0;
 
                     if (Options.Paint.FullVertGridLines)
-                    for (i = 0; i < FHeader.Columns.Count; i++)
-                    {
-                        var r1 = GetColumnRect(i);
-                        
+                        for (i = 0; i < FHeader.Columns.Count; i++)
+                        {
+                            var r1 = GetColumnRect(i);
 
-                        RectangleF rf = new RectangleF(r1.X, r1.Y, r1.Width, r1.Height);
-                        w += r1.Width;
-                        e.Graphics.DrawLine(pen, r1.Right, e.Graphics.VisibleClipBounds.Top, r1.Right, e.Graphics.VisibleClipBounds.Bottom);
 
-                        
+                            RectangleF rf = new RectangleF(r1.X, r1.Y, r1.Width, r1.Height);
+                            w += r1.Width;
+                            e.Graphics.DrawLine(pen, r1.Right, e.Graphics.VisibleClipBounds.Top, r1.Right, e.Graphics.VisibleClipBounds.Bottom);
 
 
 
 
-                    }
+
+
+                        }
 
 
 
@@ -911,7 +1043,7 @@ namespace VirtualTreeView
                 {
                     if (this.BorderStyle != BorderStyle.None)
                     {
-                        
+
                         e.Graphics.DrawRectangle(new Pen(lineColor, lineWidth), Rectangle.Ceiling(e.Graphics.VisibleClipBounds));
 
                     }
@@ -931,7 +1063,7 @@ namespace VirtualTreeView
         {
             int total = 0;
             VirtualTreeNode n = node.firstChild;
-            while(n!=null)
+            while (n != null)
             {
                 total += n.nodeHeight;
                 if ((n.childCount > 0) && ((n.state & NodeState.vsExpanded) > 0))
@@ -947,10 +1079,10 @@ namespace VirtualTreeView
 
         public void ExpandNode(VirtualTreeNode node)
         {
-            if((node.state & NodeState.vsExpanded)>0)
-            {            
+            if ((node.state & NodeState.vsExpanded) > 0)
+            {
                 totalNodeHeight -= getChildNodeTotalHeight(node);
-                node.state = (node.state^NodeState.vsExpanded);
+                node.state = (node.state ^ NodeState.vsExpanded);
             }
             else
             {
@@ -967,7 +1099,7 @@ namespace VirtualTreeView
 
             if (!vertScroll.Visible) return;
 
-            var i = vertScroll.Value + e.Delta;
+            var i = vertScroll.Value - e.Delta;
 
             if ((i >= vertScroll.Minimum) && (i <= vertScroll.Maximum))
                 vertScroll.Value = i;
@@ -986,7 +1118,7 @@ namespace VirtualTreeView
 
         }
 
-        private int FLastX=0;
+        private int FLastX = 0;
         private bool FLeftPressed = false;
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -995,11 +1127,11 @@ namespace VirtualTreeView
             if (e.Button == MouseButtons.Left)
             {
                 FLeftPressed = true;
-                FResizedColumn=GetColumnIndex(e.X);
+                FResizedColumn = GetColumnIndex(e.X);
 
-                var r=GetColumnRect(FResizedColumn);
+                var r = GetColumnRect(FResizedColumn);
 
-                if((FResizedColumn>0) && ( (e.X-r.X)<r.Width/2 ))
+                if ((FResizedColumn > 0) && ((e.X - r.X) < r.Width / 2))
                 {
                     FResizedColumn--;
                 }
@@ -1024,10 +1156,10 @@ namespace VirtualTreeView
         private void changeWidthColumn(int index, int dx)
         {
             //for(int i=index;i<FHeader.Columns.Count;i++)
-           // {
-                FHeader.Columns[index].Width -= dx;
-                ReDrawTree();
-           // }
+            // {
+            FHeader.Columns[index].Width -= dx;
+            ReDrawTree();
+            // }
 
         }
         protected override void OnMouseMove(MouseEventArgs e)
@@ -1036,7 +1168,7 @@ namespace VirtualTreeView
 
             int i;
 
-            
+
 
             if ((FResizedColumn < 0) || (FResizedColumn >= FHeader.Columns.Count)) return;
 
@@ -1050,7 +1182,7 @@ namespace VirtualTreeView
                 }
 
                 int offsetX = (horzScroll.Visible ? horzScroll.Value : 0);
-                
+
                 //
 
 
@@ -1060,16 +1192,16 @@ namespace VirtualTreeView
                     {
                         int dx = FLastX - e.X;
 
-                        if ((FLastX != 0)&&(dx!=0))
+                        if ((FLastX != 0) && (dx != 0))
                         {
-                            changeWidthColumn(i,dx);
+                            changeWidthColumn(i, dx);
                         }
 
-                            FLastX = e.X;
+                        FLastX = e.X;
                     }
                     else
                         FLastX = 0;
-                   
+
 
                     FResize = true;
                     //break;   
@@ -1086,8 +1218,8 @@ namespace VirtualTreeView
             base.OnMouseDoubleClick(e);
             if (FUpdating) return;
             int i;
-            var node = GetNodeAt(e.X,e.Y,out i);
-            if ((node != null)&&(OnNodeDoubleClick!=null))
+            var node = GetNodeAt(e.X, e.Y, out i);
+            if ((node != null) && (OnNodeDoubleClick != null))
             {
                 OnNodeDoubleClick(this, node, i);
             }
@@ -1097,11 +1229,11 @@ namespace VirtualTreeView
         {
             base.OnKeyPress(e);
 
-           
+
 
         }
 
-        void GetEditNodeAndColumn(out VirtualTreeNode node,out int column)
+        void GetEditNodeAndColumn(out VirtualTreeNode node, out int column)
         {
             node = FFirstSelected.node;
             column = FFirstSelected.column;
@@ -1131,20 +1263,20 @@ namespace VirtualTreeView
             if (e.KeyCode == Keys.PageDown)
             {
                 vertScroll.Value += vertScroll.LargeChange;
-                V_Changed(vertScroll, EventArgs.Empty);                
-            }    
+                V_Changed(vertScroll, EventArgs.Empty);
+            }
             else
             if (e.KeyCode == Keys.PageUp)
             {
                 if ((vertScroll.Value - vertScroll.LargeChange) >= 0)
                 {
-                   vertScroll.Value -= vertScroll.LargeChange;
-                   V_Changed(vertScroll, EventArgs.Empty);                    
+                    vertScroll.Value -= vertScroll.LargeChange;
+                    V_Changed(vertScroll, EventArgs.Empty);
                 }
                 else
                 {
                     vertScroll.Value = 0;
-                    V_Changed(vertScroll, EventArgs.Empty);                    
+                    V_Changed(vertScroll, EventArgs.Empty);
 
                 }
             }
@@ -1154,20 +1286,20 @@ namespace VirtualTreeView
 
         }
 
-        protected   void editOnKeyUp(object sender,KeyEventArgs e)
+        protected void editOnKeyUp(object sender, KeyEventArgs e)
         {
-            if(e.KeyCode==Keys.Return)
+            if (e.KeyCode == Keys.Return)
             {
                 VirtualTreeNode node = null;
                 int column = -1;
                 GetEditNodeAndColumn(out node, out column);
                 string s = "";
-                if(CreateEditor==null)
+                if (CreateEditor == null)
                     s = (sender as TextBox).Text;
-                
 
 
-                NewText(node,column,s);
+
+                NewText(node, column, s);
 
                 this.Controls.Remove((Control)sender);
                 EndUpdate();
@@ -1175,7 +1307,7 @@ namespace VirtualTreeView
 
             }
             else
-            if(e.KeyCode==Keys.Escape)
+            if (e.KeyCode == Keys.Escape)
             {
 
                 this.Controls.Remove((Control)sender);
@@ -1192,7 +1324,7 @@ namespace VirtualTreeView
 
             if (OnNodeNewText != null)
             {
-                OnNodeNewText(this, node,column, s);
+                OnNodeNewText(this, node, column, s);
 
                 ReDrawTree();
 
@@ -1245,7 +1377,7 @@ namespace VirtualTreeView
 
                 CreateEditor(this, node, column, out edit);
 
-               if(edit!=null)
+                if (edit != null)
                 {
                     /*edit.Top = r.Y;
                     edit.Left = rc.X;
@@ -1257,8 +1389,8 @@ namespace VirtualTreeView
                     r1.Width = rc.Width;
 
 
-                    if(horzScroll.Visible)
-                        r1.X = rc.X-horzScroll.Value;
+                    if (horzScroll.Visible)
+                        r1.X = rc.X - horzScroll.Value;
                     else
                         r1.X = rc.X;
 
@@ -1266,6 +1398,7 @@ namespace VirtualTreeView
                     edit.setText(s);
                     this.Controls.Add(edit.getEdit());
                     edit.Focus();
+                    
                 }
 
                 FEdit = edit;
@@ -1297,11 +1430,14 @@ namespace VirtualTreeView
 
         }
 
+        internal void SendExpandedEvent(VirtualTreeNode node)
+        {
+            OnNodeExpanded?.Invoke(this, node);
+        }
 
-       
 
         int FEditClickX, FEditClickY;
-       
+
         protected override void OnMouseClick(MouseEventArgs e)
         {
             base.OnMouseClick(e);
@@ -1309,50 +1445,119 @@ namespace VirtualTreeView
             if (e.Button != MouseButtons.Left)
                 return;
 
-            
+
 
             int i;
             var node = GetNodeAt(e.X, e.Y, out i);
 
-            
-            if(FEdit!=null)
+
+            /*if (FEdit != null)
             {
                 NewText(FEdit.getNode(), FEdit.getColumn(), FEdit.getText());
                 this.Controls.Remove(FEdit.getEdit());
-            }
+            }*/
 
 
 
-            if((node!=null) && (i==0) && (node.childCount>0) )
+            if ((node != null) && (i == 0) && (node.childCount > 0))
             {
 
                 OnNodeExpanded?.Invoke(this, node);
 
                 ExpandNode(node);
                 ReDrawTree();
-                
-                
+
+
 
             }
 
-            if(node!=null)
+            if (node != null)
             {
-                RemoveFromSelected(FFirstSelected?.node);
-                var s=AddToSelected(node);
+
+                SelectedContainer s = null;
+                if (!Options.Misc.MultiSelect)
+                {
+                    RemoveFromSelected(FFirstSelected?.node);
+                    s = AddToSelected(node);
+                }
+                else
+                {
+                    if (Control.ModifierKeys == Keys.Control)
+                    {
+                        if (!isSelected(node))
+                            s = AddToSelected(node);
+                        else
+                            RemoveFromSelected(node);
+                    }
+                    else
+                    if ((Control.ModifierKeys == Keys.Shift) & (FFirstSelected != null))
+                    {
+                        var m = GetMaxSelectedNode();
+
+
+                        if (CompareNodePosition(node, m) > 0)
+                        {
+
+                            var c = m;
+                            while (true)
+                            {
+                                AddToSelected(c);
+                                if (c == node) break;
+                                c = GetNext(c);
+                            }
+
+
+                        }
+                        else
+                        {
+                            var c = node;
+                            while (true)
+                            {
+                                AddToSelected(c);
+                                if (c == node) break;
+                                c = GetNext(c);
+                            }
+
+
+                        }
+
+
+
+
+
+                    }
+                    else
+                    {
+                        ClearSelected();
+                        s = AddToSelected(node);
+                    }
+
+
+                }
+
+
+
+
+
+
+
+
                 if ((s != null) && (i >= 0))
                     s.column = i;
+
+
                 ReDrawTree();
             }
 
 
-            if(e.Y<=FHeader.Height)
+            if (e.Y <= FHeader.Height)
             {
                 int column = GetColumnIndex(e.X);
-                if((column>=0)&&(OnHeaderClick!=null)&&(this.Cursor!=Cursors.VSplit))               
+                if ((column >= 0) && (OnHeaderClick != null) && (this.Cursor != Cursors.VSplit))
                     OnHeaderClick(this, column);
             }
 
-            if((node!=null)&&(i>=0) )
+            if ((node != null) && (i >= 0))
             {
                 FEditClickX = e.X;
                 FEditClickY = e.Y;
@@ -1361,7 +1566,7 @@ namespace VirtualTreeView
                 editTimer.Start();
             }
 
-            if((node!=null) && (node.checkType==CheckType.ctCheckBox) && (i==0) )
+            if ((node != null) && (node.checkType == CheckType.ctCheckBox) && (i == 0))
             {
                 if (node.checkState == CheckState.csCheckedNormal)
                     node.checkState = CheckState.csUncheckedNormal;
@@ -1375,7 +1580,7 @@ namespace VirtualTreeView
         private void EditTimer_Tick(object sender, EventArgs e)
         {
             editTimer.Stop();
-            var point=PointToClient(Cursor.Position);
+            var point = PointToClient(Cursor.Position);
             if ((point.X == FEditClickX) && (point.Y == FEditClickY))
             {
                 FEditClickX++;
@@ -1390,7 +1595,7 @@ namespace VirtualTreeView
             VirtualTreeNode node = null;
             RectangleNode rn = null;
             rn = firstRectangleNode;
-            while (rn!=null)
+            while (rn != null)
             {
                 if (rn.isInRect(X, Y)) return rn.node;
                 rn = rn.next;
@@ -1398,7 +1603,7 @@ namespace VirtualTreeView
             return node;
         }
 
-        int GetColumnIndex(int X)
+        public int GetColumnIndex(int X)
         {
             int index = -1;
 
@@ -1417,7 +1622,7 @@ namespace VirtualTreeView
                 x += FHeader.Columns[i].Width;
 
             }
-                return index;
+            return index;
         }
 
         public VirtualTreeNode GetNodeAt(int X, int Y, out int Column)
@@ -1431,7 +1636,7 @@ namespace VirtualTreeView
             int offsetX = (horzScroll.Visible ? horzScroll.Value : 0);
             X += offsetX;
 
-            for (int i=0;i<FHeader.Columns.Count;i++)
+            for (int i = 0; i < FHeader.Columns.Count; i++)
             {
                 if ((X >= x) && (X <= x + FHeader.Columns[i].Width))
                 {
@@ -1447,12 +1652,12 @@ namespace VirtualTreeView
         Rectangle GetCellRect(VirtualTreeNode node, int column)
         {
             Rectangle r = Rectangle.Empty;
-            if ((node == null) || (column<0) ) return r;
+            if ((node == null) || (column < 0)) return r;
             RectangleNode rn = null;
             rn = firstRectangleNode;
             while (rn != null)
             {
-                if (rn.node==node)
+                if (rn.node == node)
                 {
                     var rh = GetColumnRect(column);
                     r.Y = rn.rect.Y;
@@ -1468,21 +1673,21 @@ namespace VirtualTreeView
 
         Rectangle GetColumnRect(int column)
         {
-            Rectangle r=Rectangle.Empty;
+            Rectangle r = Rectangle.Empty;
 
-            if(FHeader.Columns.Count>column)
+            if (FHeader.Columns.Count > column)
             {
                 int x = 0;
-                int w=0;
-                for(int i=0;i<=column;i++)
+                int w = 0;
+                for (int i = 0; i <= column; i++)
                 {
-                       w = FHeader.Columns[i].Width;
-                       x += w;
-                    
-                      
+                    w = FHeader.Columns[i].Width;
+                    x += w;
+
+
 
                 }
-                r.X=x-w;
+                r.X = x - w;
                 r.Y = 0;
                 r.Height = FHeader.Height;
                 r.Width = w;
@@ -1499,13 +1704,13 @@ namespace VirtualTreeView
         {
             if (!FHeader.Visible) return;
             SolidBrush brush = new SolidBrush(FHeader.BackColor);
-            g.FillRectangle(brush, new Rectangle((int)g.VisibleClipBounds.X, (int)g.VisibleClipBounds.Y, (int)g.VisibleClipBounds.Width,  FHeader.Height+1 ));
+            g.FillRectangle(brush, new Rectangle((int)g.VisibleClipBounds.X, (int)g.VisibleClipBounds.Y, (int)g.VisibleClipBounds.Width, FHeader.Height + 1));
         }
 
         private void DrawHeader(Graphics g)
         {
 
-            
+
 
 
             InitTreeHeaderForPaint(g);
@@ -1520,12 +1725,12 @@ namespace VirtualTreeView
             bool drawVertLine = options.Paint.FullVertGridLines;
             int w = 0;
 
-            for (int i=0;i<FHeader.Columns.Count;i++)
+            for (int i = 0; i < FHeader.Columns.Count; i++)
             {
                 var r = GetColumnRect(i);
                 r.X -= offsetX;
-                
-                RectangleF rf = new RectangleF(r.X,r.Y,r.Width,r.Height);
+
+                RectangleF rf = new RectangleF(r.X, r.Y, r.Width, r.Height);
                 w += r.Width;
                 if (drawVertLine)
                 {
@@ -1543,10 +1748,10 @@ namespace VirtualTreeView
                 format.Alignment = FHeader.Columns[i].CaptionAlignment;
                 format.LineAlignment = FHeader.Columns[i].LineAlignment;
 
-                if(FHeader.Visible)
-                g.DrawString(FHeader.Columns[i].Name, FHeader.Font,brush, rf,format);
+                if (FHeader.Visible)
+                    g.DrawString(FHeader.Columns[i].Name, FHeader.Font, brush, rf, format);
 
-                
+
 
 
             }
@@ -1564,7 +1769,7 @@ namespace VirtualTreeView
 
         public void GetText(VirtualTreeView tree, VirtualTreeNode node, int Column, out string s)
         {
-           s = "";
+            s = "";
             if (node == null) return;
             if (node.data == null)
                 s = "Node " + node.FIndex.ToString() + " " + Column.ToString();
@@ -1578,23 +1783,23 @@ namespace VirtualTreeView
         private void InitTreeForPaint(Graphics g)
         {
             SolidBrush brush = new SolidBrush(BackColor);
-            g.FillRectangle(brush, new Rectangle((int)g.VisibleClipBounds.X, FHeader.Height + 1, (int)g.VisibleClipBounds.Width,(int)g.VisibleClipBounds.Height- FHeader.Height ));
+            g.FillRectangle(brush, new Rectangle((int)g.VisibleClipBounds.X, FHeader.Height + 1, (int)g.VisibleClipBounds.Width, (int)g.VisibleClipBounds.Height - FHeader.Height));
         }
 
 
         private VirtualTreeNode getParentNextSilbling(VirtualTreeNode node)
         {
             VirtualTreeNode next = null;
-            if ((node == null) || ((node.level)==0) && (node.nextSibling==null) )  return null;
+            if ((node == null) || ((node.level) == 0) && (node.nextSibling == null)) return null;
             next = node.parent.nextSibling;
-            if (next == null) next=getParentNextSilbling(node.parent);
+            if (next == null) next = getParentNextSilbling(node.parent);
             return next;
         }
 
         private void DrawTree(Graphics g)
         {
 
-            int offsetX = (horzScroll.Visible?horzScroll.Value:0);
+            int offsetX = (horzScroll.Visible ? horzScroll.Value : 0);
 
             StringFormat format = new StringFormat(StringFormatFlags.LineLimit | StringFormatFlags.NoWrap, 1003) { Trimming = StringTrimming.None };
 
@@ -1634,7 +1839,7 @@ namespace VirtualTreeView
             {
                 var r = GetColumnRect(i);
                 r.X -= offsetX;
-                
+
                 RectangleF rf = new RectangleF(r.X, r.Y, r.Width, r.Height);
                 if ((i == 0) && (showButtons))
                 {
@@ -1643,8 +1848,8 @@ namespace VirtualTreeView
                 }
                 //Pen pen=new Pen()
                 int y = 1;
-                if(FHeader.Visible)
-                    y = FHeader.Height + 1;                
+                if (FHeader.Visible)
+                    y = FHeader.Height + 1;
 
                 node = FFirstNode;
                 int topVisibleY = y + vertScroll.Value;
@@ -1708,7 +1913,7 @@ namespace VirtualTreeView
 
                         }
 
-                        if ((node == FFirstSelected?.node) && (i == 0))
+                        if ((/*node == FFirstSelected?.node*/isSelected(node)) && (i == 0))
                         {
                             g.FillRectangle(brushSelectedRowColor, new Rectangle((int)g.VisibleClipBounds.X, y - vertScroll.Value, (int)g.VisibleClipBounds.Width, node.nodeHeight));
 
@@ -1723,7 +1928,7 @@ namespace VirtualTreeView
                         getText(this, node, i, out s);
 
 
-                        if ((node == FFirstSelected?.node) && (i == FFirstSelected.column))
+                        if ((/*node == FFirstSelected?.node*/isSelected(node)) && (i == FFirstSelected.column))
                         {
                             if ((i == 0) && (showButtons))
                             {
@@ -1751,15 +1956,15 @@ namespace VirtualTreeView
                         var fw = rf.Width;
                         rf.Width -= node.level * buttonWidth;
 
-                        if ( (i==0) && (Options.Paint.ShowButtons))
+                        if ((i == 0) && (Options.Paint.ShowButtons))
                             rf.Width -= buttonWidth;
 
 
                         rf = DrawCellText(g, format, node, brush, showButtons, buttonWidth, s, i, rf);
 
                         rf.X -= node.level * buttonWidth;
-                        rf.Width =fw;
-                        
+                        rf.Width = fw;
+
 
 
 
@@ -1783,7 +1988,7 @@ namespace VirtualTreeView
                             /*   if (node != null)
                                    y += node.nodeHeight;*/
                         }
-                        
+
                     }
                     else
                     {
@@ -1819,20 +2024,21 @@ namespace VirtualTreeView
         }
 
 
-        private string getShortText(string s, float width, Font f, Graphics g, string endSymb="...")
+        private string getShortText(string s, float width, Font f, Graphics g, string endSymb = "...")
         {
+            if (s == null) return "";
             if (s.Length == 0) return s;
 
             var tf = g.MeasureString(s, f);
-            if(tf.Width<=width)return s;
-            string sPrev =s[0].ToString();
+            if (tf.Width <= width) return s;
+            string sPrev = s[0].ToString();
 
-            for(var i=0;i<s.Length;i++)
+            for (var i = 0; i < s.Length; i++)
             {
-              var sCur = s.Substring(0, i) + endSymb;
-              tf = g.MeasureString(sCur, f);
+                var sCur = s.Substring(0, i) + endSymb;
+                tf = g.MeasureString(sCur, f);
                 if (tf.Width > width) return sPrev;
-              sPrev = sCur;
+                sPrev = sCur;
             }
 
             return s;
@@ -1855,19 +2061,19 @@ namespace VirtualTreeView
                     OnPaintText(this, node, column, ref f, ref brush);
 
 
-               
 
-                if((GetImageIndex!=null) && (imageList != null))
+
+                if ((GetImageIndex != null) && (imageList != null))
                 {
                     BuildImageCash();
                     int imageIndex = -1;
                     GetImageIndex(this, node, column, out imageIndex);
-                    if((imageIndex>=0) && (imageIndex<FImageCash.Length) )
+                    if ((imageIndex >= 0) && (imageIndex < FImageCash.Length))
                     {
                         g.DrawImage(FImageCash[imageIndex], (int)rf.X, (int)rf.Y);
                         //imageList.Draw(g, (int)rf.X, (int)rf.Y, imageIndex);
 
-                       
+
 
                         rf.X += imageList.ImageSize.Width;
 
@@ -1880,21 +2086,27 @@ namespace VirtualTreeView
                 format.Alignment = FHeader.Columns[column].Alignment;
                 rf.Y += 1;
 
-                bool handled = false ;
+                bool handled = false;
 
                 if (DrawCell != null)
                     DrawCell(this, node, column, g, rf, out handled);
-                
 
-                if(!handled)
+
+                if (!handled)
                 {
                     if ((column > 0) || (node.checkType == CheckType.ctNone))
                     {
 
                         var shortText = getShortText(s, rf.Width, f, g);
-                        
 
-                        g.DrawString(shortText, f, brush, rf, format);
+
+                        handled = false;
+                        if (NodeDrawText != null)
+                            NodeDrawText(this, node, column, g, s, f, brush, rf, format, out handled);
+
+                        if (!handled)
+                            g.DrawString(shortText, f, brush, rf, format);
+
                     }
                     else
                     {
@@ -1909,7 +2121,15 @@ namespace VirtualTreeView
 
                         var rf1 = rf;
                         rf1.X += size.Width;
-                        g.DrawString(s, f, brush, rf1, format);
+
+                        handled = false;
+                        if (NodeDrawText != null)
+                            NodeDrawText(this, node, column, g, s, f, brush, rf, format, out handled);
+
+                        if (!handled)
+                            g.DrawString(s, f, brush, rf1, format);
+
+
                     }
                 }
 
@@ -1919,17 +2139,17 @@ namespace VirtualTreeView
                 if ((node.childCount > 0) && (column == 0) && (showButtons))
                 {
                     if ((node.state & NodeState.vsExpanded) == 0)
-                        g.DrawImage(FPlusButton, new PointF(rf.X - buttonWidth+2, rf.Y+3));
+                        g.DrawImage(FPlusButton, new PointF(rf.X - buttonWidth + 2, rf.Y + 3));
 
                     //g.DrawString("+", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
 
 
                     else
-                        g.DrawImage(FMinusButton, new PointF(rf.X - buttonWidth+2, rf.Y+3));
+                        g.DrawImage(FMinusButton, new PointF(rf.X - buttonWidth + 2, rf.Y + 3));
                     //g.DrawString("-", f, brush, new PointF(rf.X - buttonWidth, rf.Y));
                 }
 
-                
+
 
             }
             finally
@@ -1971,9 +2191,9 @@ namespace VirtualTreeView
 
         }
 
-        public T GetNodeData<T> (VirtualTreeNode node)
+        public T GetNodeData<T>(VirtualTreeNode node)
         {
-            if((node==null)||(node.data==null))
+            if ((node == null) || (node.data == null))
                 return default(T);
 
             return (T)node.data;
@@ -1985,7 +2205,7 @@ namespace VirtualTreeView
 
 
 
-        internal void ReDrawTree(Graphics g=null)
+        internal void ReDrawTree(Graphics g = null)
         {
             if (FUpdating) return;
 
@@ -1995,8 +2215,8 @@ namespace VirtualTreeView
                 gr = Graphics.FromImage(bitMap);
             }
 
-        
-            
+
+
 
 
 
@@ -2010,7 +2230,7 @@ namespace VirtualTreeView
             else
                 g1 = g;
 
-            g1.DrawImage(bitMap,0,0);
+            g1.DrawImage(bitMap, 0, 0);
         }
 
         public void BeginUpdate()
@@ -2054,6 +2274,30 @@ namespace VirtualTreeView
         }
 
 
+        public VirtualTreeNode GetNextSelected(VirtualTreeNode node)
+        {
+            if ((node == null) || (FFirstSelected == null)) return null;
+
+            var n = FFirstSelected;
+            while (n != null)
+            {
+                if (n.node == node)
+                {
+                    if (n.next != null) return n.next.node;
+                    else
+                        return null;
+
+                }
+
+
+                n = n.next;
+            }
+
+            return null;
+
+        }
+
+
         public VirtualTreeNode GetPrevSibling(VirtualTreeNode node)
         {
             return node?.prevSibling;
@@ -2066,18 +2310,18 @@ namespace VirtualTreeView
 
 
 
-        VirtualTreeNode IntersectSorted(VirtualTreeNode node1,VirtualTreeNode node2, int column,SortDirection sortDirection, CompareNode compare)
+        VirtualTreeNode IntersectSorted(VirtualTreeNode node1, VirtualTreeNode node2, int column, SortDirection sortDirection, CompareNode compare)
         {
-            VirtualTreeNode current, n1, n2,first;
+            VirtualTreeNode current, n1, n2, first;
 
             n1 = node1;
             n2 = node2;
             int result;
             int d = sortDirection == SortDirection.sdDescending ? -1 : 1;
-            
+
 
             compare(this, n1, n2, column, out result);
-            if (d*result <=0 )
+            if (d * result <= 0)
             {
                 current = n1;
                 n1 = n1.nextSibling;
@@ -2085,13 +2329,13 @@ namespace VirtualTreeView
             else
             {
                 current = n2;
-                n2 = n2.nextSibling;                 
+                n2 = n2.nextSibling;
             }
             first = current;
-            while((n1!=null) && (n2!=null) )
+            while ((n1 != null) && (n2 != null))
             {
                 compare(this, n1, n2, column, out result);
-                if(d*result<=0)
+                if (d * result <= 0)
                 {
                     current.nextSibling = n1;
                     current = n1;
@@ -2126,7 +2370,7 @@ namespace VirtualTreeView
         public void SortTree(int column, SortDirection direction)
         {
             int stackSize = 32;
-            SortStackItem[] stack=new SortStackItem[stackSize];
+            SortStackItem[] stack = new SortStackItem[stackSize];
             for (int i = 0; i < stackSize; i++)
                 stack[i] = new SortStackItem();
 
@@ -2158,10 +2402,10 @@ namespace VirtualTreeView
 
                 if (stackPos > 0)
                     FFirstNode = stack[0].node;
-                
-               
+
+
                 RebuildIndex(FFirstNode);
-             
+
                 node = FFirstNode;
                 while (node != null)
                 {
@@ -2188,7 +2432,7 @@ namespace VirtualTreeView
             FFirstSelected = null;
             vertScroll.Value = vertScroll.Minimum;
             horzScroll.Value = horzScroll.Minimum;
-            if (!FUpdating) ReDrawTree();           
+            if (!FUpdating) ReDrawTree();
         }
 
         public VirtualTreeNode GetFirstChild(VirtualTreeNode node)
@@ -2197,7 +2441,124 @@ namespace VirtualTreeView
         }
 
 
-    }
+        public string TextNode(VirtualTreeNode node, int column)
+        {
+            if (OnGetNodeCellText != null)
+            {
+                OnGetNodeCellText(this, node, column, out string s);
+                return s;
+            }
+            else
+                return "";
+
+
+        }
+
+
+
+        public delegate bool IsImportNode(VirtualTreeNode node);
+
+
+        bool IsDigitsOnly(string str)
+        {
+            foreach (char c in str)
+            {
+                
+                if (!char.IsDigit(c))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public DataSet VirtualTreeViewToDataSet(IsImportNode isImport = null, bool importChild=false)
+        {
+
+            var tree = this;
+
+            DataSet ds = new DataSet();
+
+            DataTable table = new DataTable();
+
+            for (int i = 0; i < tree.Header.Columns.Count; i++)
+            {
+
+
+
+                if (tree.Header.Columns[i].fieldInfo == null)
+                    table.Columns.Add(tree.Header.Columns[i].Name, Type.GetType("System.String"));
+                else
+                    table.Columns.Add(tree.Header.Columns[i].Name,tree.Header.Columns[i].fieldInfo.FieldType);
+
+
+
+            }
+
+
+
+
+
+            var node = tree.GetFirst();
+
+
+            while (node != null)
+            {
+
+                var row = table.NewRow();
+                for (int i = 0; i < tree.Header.Columns.Count; i++)
+                {
+
+                    if (tree.Header.Columns[i].fieldInfo == null)
+                    {
+                        string s = "";
+                        OnGetNodeCellText?.Invoke(tree, node, i, out s);
+
+                        if ((s.Length > 10) && (IsDigitsOnly(s)))
+                            row[i] = "'" + s;
+                        else
+                            row[i] = s;
+
+                    }
+                    else
+                    {
+                        if(node.data!=null)
+                        {
+                            row[i] = tree.Header.Columns[i].fieldInfo.GetValue(node.data);
+
+                        }
+                        else
+                        {
+                            row[i] = null;
+                        }
+
+
+                    }
+
+
+
+                }
+
+                if ((isImport == null) || (isImport(node)))
+                    table.Rows.Add(row);
+
+                if (importChild)
+                    node = tree.GetNext(node);
+                else
+                    node = tree.GetNextSibling(node);
+            }
+
+
+            ds.Tables.Add(table);
+
+            return ds;
+        }
+
+
+    
+
+
+
+}
 
     
 
