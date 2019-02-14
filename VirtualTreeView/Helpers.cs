@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -69,6 +69,11 @@ namespace VirtualTreeView
         private bool editable = false;
 
         public bool Editable { get => editable; set => editable = value; }
+
+        private bool multiSelect = false;
+
+        public bool MultiSelect { get => multiSelect; set => multiSelect = value; }
+
     }
 
 
@@ -97,10 +102,10 @@ namespace VirtualTreeView
     }
 
 
-    class Selected
+    public class SelectedContainer
     {
         public VirtualTreeNode node = null;
-        public Selected next = null;
+        public SelectedContainer next = null;
         public int column = -1;
 
     }
@@ -116,5 +121,79 @@ namespace VirtualTreeView
         bsTriangle,
         bsRectangle        
     }
+
+
+
+    public class SelectedHelper
+
+    {
+
+        VirtualTreeView tree = null;
+
+        internal SelectedHelper(VirtualTreeView t)
+        {
+            tree = t;
+        }
+
+        public bool this[VirtualTreeNode node]
+        {
+            set
+            {
+                if (value)
+                    tree.AddToSelected(node);
+                else
+                    tree.RemoveFromSelected(node);
+            }
+
+
+            get
+            {
+
+                return tree.isSelected(node);
+
+            }
+
+
+        }
+
+    }
+
+
+
+    public class ExpandedHelper
+
+    {
+
+        VirtualTreeView tree = null;
+
+        internal ExpandedHelper(VirtualTreeView t)
+        {
+            tree = t;
+        }
+
+        public bool this[VirtualTreeNode node]
+        {
+            set
+            {
+                
+                if( (node.childCount>0) && (!this[node]) )
+                    tree.SendExpandedEvent(node);
+                tree.ExpandNode(node);
+            }   
+            
+
+
+        get
+            {
+
+                return (node.state & NodeState.vsExpanded) >0;
+
+            }
+
+
+        }
+
+    }
+
 
 }
