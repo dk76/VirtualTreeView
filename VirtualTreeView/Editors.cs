@@ -35,6 +35,8 @@ namespace VirtualTreeView
         protected VirtualTreeNode FNode = null;
         protected int FColumn = -1;
 
+        protected int FCntNewText = 0;
+
 
         public void setEdit(Control edit)
         {
@@ -45,9 +47,11 @@ namespace VirtualTreeView
         }
 
         private void FEdit_LostFocus(object sender, EventArgs e)
-        {
+        {            
             var ke = new KeyEventArgs(Keys.Return);
-            editOnKeyUp(sender, ke);
+            if(FCntNewText==0)
+                editOnKeyUp(sender, ke);
+            FCntNewText++;
         }
 
         public void setText(String s) { FText = s; }
@@ -81,6 +85,8 @@ namespace VirtualTreeView
         {
             if (e.KeyCode == Keys.Return)
             {
+                getEdit().LostFocus -= FEdit_LostFocus;
+
                 VirtualTreeNode node = FNode;
                 int column = FColumn;
 
@@ -88,10 +94,14 @@ namespace VirtualTreeView
 
 
 
-                FTree.NewText(node, column, s);
+                if((FCntNewText==0)&&(FText!=s))
+                    FTree.NewText(node, column, s);
+                FCntNewText++;
                 FTree.RemoveControl(getEdit());
                 FTree.EndUpdate();
-                FTree.ReDrawTree();
+                e.Handled = true;
+                FEdit.KeyUp -= editOnKeyUp;
+
 
 
             }
@@ -106,7 +116,7 @@ namespace VirtualTreeView
 
                 FTree.EndUpdate();
                 FTree.ReDrawTree();
-
+                e.Handled = true;
             }
 
         }
