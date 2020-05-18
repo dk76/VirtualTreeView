@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -194,6 +195,68 @@ namespace VirtualTreeView
         }
 
     }
+
+
+
+    internal class NodesEnumerator : IEnumerator<VirtualTreeNode>
+    {
+        VirtualTreeNode FFirst = null;
+        VirtualTreeNode FCurrent = null;
+        VirtualTreeView tree = null;
+
+        public NodesEnumerator(VirtualTreeView tree,VirtualTreeNode node=null)
+        {
+            FFirst = node;
+            this.tree = tree;          
+        }
+        VirtualTreeNode IEnumerator<VirtualTreeNode>.Current => FCurrent;
+        object IEnumerator.Current => FCurrent;
+        void IDisposable.Dispose()
+        {
+            
+        }
+        bool IEnumerator.MoveNext()
+        {
+            if (FCurrent == null)
+            {
+                if (FFirst == null) FCurrent = tree.GetFirst();
+                else
+                    FCurrent = tree.GetFirstChild(FFirst);
+            }
+            else
+                FCurrent = tree.GetNextSibling(FCurrent);
+            return FCurrent != null;
+        }
+        void IEnumerator.Reset()
+        {
+            FCurrent = null;
+        }
+    }
+
+    public class NodesEnumarable : IEnumerable<VirtualTreeNode>
+    {
+        VirtualTreeView tree;
+        VirtualTreeNode node;
+        
+        public NodesEnumarable(VirtualTreeView tree, VirtualTreeNode node=null)
+        {
+            this.tree = tree;
+            this.node = node;
+        }
+
+        public IEnumerator<VirtualTreeNode> GetEnumerator()
+        {
+            return new NodesEnumerator(tree, node);
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return new NodesEnumerator(tree, node);
+        }
+    }
+
+
+
 
 
 }
