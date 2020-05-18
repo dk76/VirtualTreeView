@@ -3,6 +3,8 @@ using System.Windows.Forms;
 using System.Drawing;
 using System.ComponentModel;
 using System.Data;
+using System.Collections;
+using System.Collections.Generic;
 
 namespace VirtualTreeView
 {
@@ -21,11 +23,13 @@ namespace VirtualTreeView
     public delegate void OnCreateEditor(VirtualTreeView tree, VirtualTreeNode node, int column, out IEditor edit);
     public delegate void CellEditing(VirtualTreeView tree, VirtualTreeNode node, int column, out bool enable);
     public delegate void OnDrawText(VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, string text, Font font, Brush brush, RectangleF rect, StringFormat format, out bool handled);
-
+    public delegate void BeforeCellPaint(VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, RectangleF rect);
 
     public class VirtualTreeView : UserControl, IDisposable
     {
 
+
+        public NodesEnumarable Nodes { get => new NodesEnumarable(this); }
 
         private TreeOptionsHelper options = new TreeOptionsHelper();
 
@@ -65,6 +69,7 @@ namespace VirtualTreeView
         public event CellEditing Editing = null;
         public event GetNodeHintText OnGetNodeHintText = null;
         public event OnDrawText NodeDrawText = null;
+        public event BeforeCellPaint OnBeforeCellPaint = null;
 
 
         public int editDelay = 50;
@@ -1748,7 +1753,7 @@ namespace VirtualTreeView
                 format.Alignment = FHeader.Columns[i].CaptionAlignment;
                 format.LineAlignment = FHeader.Columns[i].LineAlignment;
 
-                if (FHeader.Visible)
+                if ((FHeader.Visible) && (FHeader.Columns[i].Width>0)  )
                     g.DrawString(FHeader.Columns[i].Name, FHeader.Font, brush, rf, format);
 
 
@@ -2047,6 +2052,9 @@ namespace VirtualTreeView
 
         private RectangleF DrawCellText(Graphics g, StringFormat format, VirtualTreeNode node, SolidBrush brush, bool showButtons, float buttonWidth, string s, int column, RectangleF rf)
         {
+
+            if (rf.Width == 0) return rf;
+
             var font = Font;
             var rfOrig = rf;
             var sFormat = format;
@@ -2056,6 +2064,31 @@ namespace VirtualTreeView
             {
 
                 var f = Font;
+
+
+
+                if (OnBeforeCellPaint != null)
+                {
+                    RectangleF bf=rf;
+                    bf.Y += LineWidth;
+                    bf.Height -= LineWidth;
+
+
+                    bf.X -= node.level * buttonWidth;
+
+                    var fw = rf.Width;
+                    bf.Width += node.level * buttonWidth;
+
+                    if ((column == 0) && (Options.Paint.ShowButtons))
+                    {
+                        bf.X -= buttonWidth;
+                        bf.Width += buttonWidth;
+                    }
+
+
+
+                    OnBeforeCellPaint(this, node, column, g, bf);
+                }
 
                 if (OnPaintText != null)
                     OnPaintText(this, node, column, ref f, ref brush);
@@ -2087,6 +2120,10 @@ namespace VirtualTreeView
                 rf.Y += 1;
 
                 bool handled = false;
+
+
+                
+
 
                 if (DrawCell != null)
                     DrawCell(this, node, column, g, rf, out handled);
@@ -2553,12 +2590,8 @@ namespace VirtualTreeView
             return ds;
         }
 
-
-    
-
-
-
-}
+      
+    }
 
     
 
