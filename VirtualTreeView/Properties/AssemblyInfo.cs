@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // Управление общими сведениями о сборке осуществляется с помощью 
 // набора атрибутов. Измените значения этих атрибутов, чтобы изменить сведения,
 // связанные со сборкой.
-[assembly: AssemblyTitle("VirtualTreeView")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("WinForms VirtualTreeView")]
+[assembly: AssemblyDescription("Simple variations on VirtualTreeView for Delphi.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("Dmitry Kornilov")]
 [assembly: AssemblyProduct("VirtualTreeView")]
-[assembly: AssemblyCopyright("Copyright ©  2017")]
+[assembly: AssemblyCopyright("Copyright ©  2020")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
