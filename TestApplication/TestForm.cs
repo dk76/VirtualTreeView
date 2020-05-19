@@ -11,192 +11,91 @@ using VirtualTreeView;
 
 namespace TestApplication
 {
+
+   
+
     public partial class TestForm : Form
     {
 
-        Random random;
+        
 
-        string hello = "HelloHelloHelloHelloHelloHello";
+
 
         public TestForm()
         {
             InitializeComponent();
         }
 
-        private void button1_Click(object sender, EventArgs e)
-        {
-            VirtualTreeColumn column = null;
-
-            random = new Random();
-
-           // vtItems.PaintOptions |=PaintOption.toFullVertGridLines|PaintOption.toShowHorzGridLines;
-
-            vtItems.BeginUpdate();
-
-            for(int i=0;i<10;i++)
-            {
-
-                column = new VirtualTreeColumn();
-                column.Width = 70;
-                column.Name = i.ToString();
-                column.Alignment = StringAlignment.Far;
-                column.CaptionAlignment = StringAlignment.Center;
-
-                vtItems.Header.Columns.Add(column);
-               
-            }
-
-
-            for (int i=0;i<100000;i++)
-            {
-                var node=vtItems.InsertNode(null, NodeAttachMode.amInsertAfter, null);
-                node.checkType = CheckType.ctCheckBox;
-
-
-            }
-
-            vtItems.Invalidate();
-            vtItems.EndUpdate();
 
 
 
-
-        }
-
-
-        string hello1 = "hello";
 
         private void vtItems_OnGetNodeCellText(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out string cellText)
         {
+            var n = vtItems.GetNodeData<NodeData>(node);
+            switch (column)
+            {
+                case 0: cellText = (n.num).ToString(); break;
+                default: cellText = n.name; break;
+            }
+        }
+
+        private void buttonMakeMillion_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                vtItems.BeginUpdate();
+                vtItems.Clear();
+                for (int i = 1; i <= 1000000; i++)
+                {
+                    var n = new NodeData();
+                    n.num = i;
+                    n.name = $"Node {i}";
+                    var node=vtItems.InsertNode(null, NodeAttachMode.amInsertAfter, n);
+                    vtItems.InsertNode(node, NodeAttachMode.amAddChildLast, n);
+                }
+            }
+            finally
+            {
+                vtItems.EndUpdate();
+            }
+
+        }
+
+        SortDirection sd = SortDirection.sdAscending;
+        private void vtItems_OnHeaderClick(VirtualTreeView.VirtualTreeView tree, int column)
+        {
+
             if (column == 0)
-                cellText = node.index.ToString();
+            {
+                if (sd == SortDirection.sdAscending)
+                    sd = SortDirection.sdDescending;
+                else
+                    sd = SortDirection.sdAscending;
+                tree.SortTree(column, sd);
+            }
+        }
+
+        private void vtItems_OnCompareNode(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node1, VirtualTreeNode node2, int column, out int result)
+        {
+            var n1 = vtItems.GetNodeData<NodeData>(node1);
+            var n2 = vtItems.GetNodeData<NodeData>(node2);
+
+            if (column == 0)
+            {
+                result = n1.num - n2.num;
+            }
             else
-                cellText =  hello1;
-
-        }
-
-        private void vtItems_GetImageIndex(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out int index)
-        {
-            index = -1;
-            if(column==0)
-                index = 0;
-
-        }
-
-        private void vtItems_DrawCell(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, RectangleF rect, out bool handled)
-        {
-            handled = column == 1;
-        }
-
-        private void button2_Click(object sender, EventArgs e)
-        {
-            
-
-            virtualTreeView1.BeginUpdate();
-            for (int i = 0; i < 10; i++)
-            {
-                var node = virtualTreeView1.InsertNode(null, NodeAttachMode.amInsertAfter, null);
-                node.nodeHeight *= 2;
-                node= virtualTreeView1.InsertNode(node, NodeAttachMode.amAddChildLast, null);
-                //node.nodeHeight *= 2;
-            }
-            virtualTreeView1.EndUpdate();
-
-
-
-           // var en = new NodesEnumerator(virtualTreeView1);
-            
-
-            var cnt = 0;
-           foreach( var n in virtualTreeView1.Nodes)
-            {
-                var s1 = ";";
-                cnt++;
-            }
-
-
-
-            var s = ";";
-
-
-
+                result = string.Compare(n1.name,n2.name);
 
 
 
         }
-
-        private void virtualTreeView1_CreateEditor(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out IEditor edit)
-        {
-            edit = new   DateEditor(tree,node,column);
-        }
-
-        private void virtualTreeView1_Editing(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out bool enable)
-        {
-            enable = (column>0);
-        }
-
-        private void virtualTreeView1_Load(object sender, EventArgs e)
-        {
-
-        }
-
-        private void virtualTreeView1_OnGetNodeCellText(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out string cellText)
-        {
-            cellText = hello;
-        }
-
-        private void virtualTreeView1_OnNodeNewText(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, string cellText)
-        {
-            hello = cellText;
-            MessageBox.Show("1");
-        }
-
-        private void button3_Click(object sender, EventArgs e)
-        {
-            virtualTreeView1.ShowHint = true;
-        }
-
-        private void virtualTreeView1_OnGetNodeHintText(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out string hintText)
-        {
-            hintText = "Olalala";
-        }
-
-        private void virtualTreeView1_MouseClick(object sender, MouseEventArgs e)
-        {
-            virtualTreeView1.GetNodeAt(e.X, e.Y);
-            
-        }
-
-        private void virtualTreeView1_NodeDrawText(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, string text, Font font, Brush brush, RectangleF rect, StringFormat format, out bool handled)
-        {
-            handled = false;
-            if(column==1)
-            {
-                handled = true;
-                g.DrawString("bbbbbb", font, brush, rect,format);
-
-            }
-
-
-        }
-
-        private void vtItems_OnNodeNewText(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, string cellText)
-        {
-            //MessageBox.Show(cellText);
-            hello1 = cellText;
-        }
-
-        private void virtualTreeView1_OnBeforeCellPaint(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, Graphics g, RectangleF rect)
-        {
-            //
-            g.FillRectangle(new SolidBrush(Color.Red),rect);
-        }
-
-        /*private void virtualTreeView1_CreateEditor(VirtualTreeView.VirtualTreeView tree, VirtualTreeNode node, int column, out Control edit)
-        {
-            //
-            var dt=new DateTimePicker();
-            edit = dt;
-        }*/
     }
+    public class NodeData
+    {
+        public int num = 0;
+        public string name = "";
+    }
+
 }
