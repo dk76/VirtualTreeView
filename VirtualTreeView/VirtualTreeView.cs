@@ -1257,7 +1257,8 @@ namespace VirtualTreeView
                 if ((FFirstSelected != null) && (FFirstSelected.column >= 0))
                 {
                     //BeginUpdate();
-                    CreateEditorProc(FFirstSelected.node, FFirstSelected.column);
+                    if(FFirstSelected!=null)
+                        CreateEditorProc(FFirstSelected.node, FFirstSelected.column);
 
                 }
 
@@ -1590,7 +1591,8 @@ namespace VirtualTreeView
             {
                 FEditClickX++;
                 //BeginUpdate();
-                CreateEditorProc(FFirstSelected.node, FFirstSelected.column);
+                if( FFirstSelected!=null )
+                    CreateEditorProc(FFirstSelected.node, FFirstSelected.column);
 
             }
         }
