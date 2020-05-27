@@ -51,7 +51,7 @@ namespace TestApplication
                     var n = new NodeData();
                     n.num = i;
                     n.name = $"Node {i}";
-                    var node=vtItems.InsertNode(null, NodeAttachMode.amInsertAfter, n);
+                    var node=vtItems.InsertNode(null, NodeAttachMode.amAddChildLast, n);
                     vtItems.InsertNode(node, NodeAttachMode.amAddChildLast, n);
                 }
             }

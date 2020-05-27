@@ -774,7 +774,7 @@ namespace VirtualTreeView
 
 
 
-            if ((mode == NodeAttachMode.amInsertAfter) || (mode == NodeAttachMode.amInsertBefore))
+            if (((mode == NodeAttachMode.amInsertAfter) || (mode == NodeAttachMode.amInsertBefore)) || ( (node==null)  ))
             {
                 if (node == null)
                 {
@@ -788,7 +788,7 @@ namespace VirtualTreeView
                     }
                     else
                     {
-                        if (mode == NodeAttachMode.amInsertAfter)
+                        if ((mode == NodeAttachMode.amInsertAfter) || (mode==NodeAttachMode.amAddChildLast))
                         {
                             FLastNode.nextSibling = newNode;
                             newNode.FIndex = FLastNode.FIndex + 1;
