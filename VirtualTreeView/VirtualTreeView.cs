@@ -1355,6 +1355,14 @@ namespace VirtualTreeView
                     }
                 }
             }
+            else
+            if((e.KeyCode==Keys.Left) || (e.KeyCode==Keys.Right))
+            {
+                if ((FFirstSelected == null) || (FFirstSelected.column < 0)) return;
+                int c = (e.KeyCode == Keys.Left) ? (FFirstSelected.column - 1) : (FFirstSelected.column + 1);
+                if ((c >= 0) && (c < FHeader.Columns.Count)) FFirstSelected.column = c;
+                ReDrawTree();
+            }
 
 
 
