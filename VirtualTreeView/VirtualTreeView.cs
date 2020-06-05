@@ -791,6 +791,7 @@ namespace VirtualTreeView
                         if ((mode == NodeAttachMode.amInsertAfter) || (mode==NodeAttachMode.amAddChildLast))
                         {
                             FLastNode.nextSibling = newNode;
+                            newNode.prevSibling = FLastNode;
                             newNode.FIndex = FLastNode.FIndex + 1;
                             FLastNode = newNode;
 
@@ -1331,9 +1332,16 @@ namespace VirtualTreeView
                 if (!Options.Misc.MultiSelect)
                 {
                     VirtualTreeNode next = null;
-
                     next = this.GetPrevSibling(node);
-                    if(next==null)next=node.parent;
+
+                    if ((next != null) && (next.childCount > 0) && ((NodeState.vsExpanded & next.state) == NodeState.vsExpanded))
+                        next = this.GetLastChild(next);
+                        
+
+                    if ((next==null) && (node.level>0)) next=node.parent;
+                    
+                        
+
 
 
 
@@ -2542,6 +2550,17 @@ namespace VirtualTreeView
         public VirtualTreeNode GetFirstChild(VirtualTreeNode node)
         {
             return node?.firstChild;
+        }
+
+        public VirtualTreeNode GetLastChild(VirtualTreeNode node)
+        {
+            var n = node.firstChild;
+            while (n != null)
+            {
+                if (n.nextSibling == null) return n;
+                n = n.nextSibling;
+            }
+            return null;
         }
 
 
