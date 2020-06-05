@@ -1230,6 +1230,21 @@ namespace VirtualTreeView
             }
         }
 
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.Right:
+                case Keys.Left:
+                case Keys.Up:
+                case Keys.Down:
+                    return true;
+               
+            }
+            return base.IsInputKey(keyData);
+        }
+
         protected override void OnKeyPress(KeyPressEventArgs e)
         {
             base.OnKeyPress(e);
@@ -1286,6 +1301,56 @@ namespace VirtualTreeView
 
                 }
             }
+            else
+            if(e.KeyCode==Keys.Down)
+            {
+                var node = FFirstSelected?.node;
+                if (node == null) return;
+                if (!Options.Misc.MultiSelect)
+                {
+                    VirtualTreeNode next = null;
+                    if ((node.childCount == 0) || (((NodeState.vsExpanded & node.state) != NodeState.vsExpanded))) next = this.GetNextSibling(node);
+                    else
+                        next = this.GetFirstChild(node);
+                    if((next==null) && (node.parent!=null))next = this.GetNextSibling(node.parent);
+                    if (next != null)
+                    {
+                        var i = FFirstSelected?.column;
+                        RemoveFromSelected(node);
+                        var s=AddToSelected(next);
+                        s.column = (int)i;
+                        ReDrawTree();
+                    }
+                }
+            }
+            else
+            if (e.KeyCode == Keys.Up)
+            {
+                var node = FFirstSelected?.node;
+                if (node == null) return;
+                if (!Options.Misc.MultiSelect)
+                {
+                    VirtualTreeNode next = null;
+
+                    next = this.GetPrevSibling(node);
+                    if(next==null)next=node.parent;
+
+
+
+                    if (next != null)
+                    {
+                        var i = FFirstSelected?.column;
+                        RemoveFromSelected(node);
+                        var s = AddToSelected(next);
+                        s.column = (int)i;
+                        ReDrawTree();
+                    }
+                }
+            }
+
+
+
+
 
 
 
