@@ -1363,11 +1363,20 @@ namespace VirtualTreeView
                 if ((c >= 0) && (c < FHeader.Columns.Count)) FFirstSelected.column = c;
                 ReDrawTree();
             }
-
-
-
-
-
+            else
+            if( (e.KeyCode==Keys.Add) || (e.KeyCode==Keys.Oemplus))
+            {
+                if ((FFirstSelected == null) || (FFirstSelected.node == null) || (FFirstSelected.node.childCount == 0)  || ( (FFirstSelected.node.state & NodeState.vsExpanded) ==NodeState.vsExpanded )   ) return;
+                ExpandNode(FFirstSelected.node);
+                ReDrawTree();
+            }
+            else
+            if( (e.KeyCode==Keys.Subtract) || (e.KeyCode==Keys.OemMinus)  )
+            {
+                if ((FFirstSelected == null) || (FFirstSelected.node == null) || (FFirstSelected.node.childCount == 0) || ((FFirstSelected.node.state & NodeState.vsExpanded) != NodeState.vsExpanded)) return;
+                ExpandNode(FFirstSelected.node);
+                ReDrawTree();
+            }
 
 
 
