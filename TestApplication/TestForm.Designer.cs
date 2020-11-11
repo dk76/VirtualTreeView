@@ -29,9 +29,11 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(TestForm));
+            VirtualTreeView.VirtualTreeColumn virtualTreeColumn1 = new VirtualTreeView.VirtualTreeColumn();
+            VirtualTreeView.VirtualTreeColumn virtualTreeColumn2 = new VirtualTreeView.VirtualTreeColumn();
             VirtualTreeView.MiscOptionHelper miscOptionHelper1 = new VirtualTreeView.MiscOptionHelper();
             VirtualTreeView.PaintOptionHelper paintOptionHelper1 = new VirtualTreeView.PaintOptionHelper();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(TestForm));
             this.panel1 = new System.Windows.Forms.Panel();
             this.buttonMakeMillion = new System.Windows.Forms.Button();
             this.panel2 = new System.Windows.Forms.Panel();
@@ -46,15 +48,17 @@
             this.panel1.Controls.Add(this.buttonMakeMillion);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Top;
             this.panel1.Location = new System.Drawing.Point(0, 0);
+            this.panel1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(870, 42);
+            this.panel1.Size = new System.Drawing.Size(1015, 48);
             this.panel1.TabIndex = 0;
             // 
             // buttonMakeMillion
             // 
-            this.buttonMakeMillion.Location = new System.Drawing.Point(12, 12);
+            this.buttonMakeMillion.Location = new System.Drawing.Point(14, 14);
+            this.buttonMakeMillion.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.buttonMakeMillion.Name = "buttonMakeMillion";
-            this.buttonMakeMillion.Size = new System.Drawing.Size(96, 23);
+            this.buttonMakeMillion.Size = new System.Drawing.Size(112, 27);
             this.buttonMakeMillion.TabIndex = 0;
             this.buttonMakeMillion.Text = "Make million";
             this.buttonMakeMillion.UseVisualStyleBackColor = true;
@@ -65,9 +69,10 @@
             this.panel2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panel2.Controls.Add(this.vtItems);
             this.panel2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panel2.Location = new System.Drawing.Point(0, 42);
+            this.panel2.Location = new System.Drawing.Point(0, 48);
+            this.panel2.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.panel2.Name = "panel2";
-            this.panel2.Size = new System.Drawing.Size(870, 637);
+            this.panel2.Size = new System.Drawing.Size(1015, 735);
             this.panel2.TabIndex = 1;
             // 
             // vtItems
@@ -78,8 +83,21 @@
             this.vtItems.ButtonStyle = VirtualTreeView.ButtonStyle.bsRectangle;
             this.vtItems.Dock = System.Windows.Forms.DockStyle.Fill;
             this.vtItems.Header.BackColor = System.Drawing.Color.White;
-            this.vtItems.Header.Columns = ((System.Collections.Generic.List<VirtualTreeView.VirtualTreeColumn>)(resources.GetObject("resource.Columns")));
-            this.vtItems.Header.Font = new System.Drawing.Font("Tahoma", 8F);
+            virtualTreeColumn1.Alignment = System.Drawing.StringAlignment.Near;
+            virtualTreeColumn1.CaptionAlignment = System.Drawing.StringAlignment.Near;
+            virtualTreeColumn1.CaptionLineAlignment = System.Drawing.StringAlignment.Center;
+            virtualTreeColumn1.LineAlignment = System.Drawing.StringAlignment.Center;
+            virtualTreeColumn1.Name = "Num";
+            virtualTreeColumn1.Width = 100;
+            virtualTreeColumn2.Alignment = System.Drawing.StringAlignment.Near;
+            virtualTreeColumn2.CaptionAlignment = System.Drawing.StringAlignment.Near;
+            virtualTreeColumn2.CaptionLineAlignment = System.Drawing.StringAlignment.Center;
+            virtualTreeColumn2.LineAlignment = System.Drawing.StringAlignment.Center;
+            virtualTreeColumn2.Name = "Name";
+            virtualTreeColumn2.Width = 300;
+            this.vtItems.Header.Columns.Add(virtualTreeColumn1);
+            this.vtItems.Header.Columns.Add(virtualTreeColumn2);
+            this.vtItems.Header.Font = new System.Drawing.Font("Tahoma", 8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.vtItems.Header.ForeColor = System.Drawing.Color.Black;
             this.vtItems.Header.Height = 16;
             this.vtItems.Header.Visible = true;
@@ -87,6 +105,7 @@
             this.vtItems.LineColor = System.Drawing.Color.Silver;
             this.vtItems.LineWidth = 1F;
             this.vtItems.Location = new System.Drawing.Point(0, 0);
+            this.vtItems.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.vtItems.Name = "vtItems";
             miscOptionHelper1.Editable = false;
             miscOptionHelper1.MultiSelect = false;
@@ -97,7 +116,7 @@
             paintOptionHelper1.ShowHorzGridLines = true;
             this.vtItems.Options.Paint = paintOptionHelper1;
             this.vtItems.ShowHint = true;
-            this.vtItems.Size = new System.Drawing.Size(868, 635);
+            this.vtItems.Size = new System.Drawing.Size(1013, 733);
             this.vtItems.TabIndex = 0;
             this.vtItems.OnGetNodeCellText += new VirtualTreeView.GetNodeCellText(this.vtItems_OnGetNodeCellText);
             this.vtItems.OnHeaderClick += new VirtualTreeView.HeaderClick(this.vtItems_OnHeaderClick);
@@ -105,6 +124,7 @@
             // 
             // imageList1
             // 
+            this.imageList1.ColorDepth = System.Windows.Forms.ColorDepth.Depth8Bit;
             this.imageList1.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("imageList1.ImageStream")));
             this.imageList1.TransparentColor = System.Drawing.Color.White;
             this.imageList1.Images.SetKeyName(0, "green.bmp");
@@ -113,12 +133,13 @@
             // 
             // TestForm
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(870, 679);
+            this.ClientSize = new System.Drawing.Size(1015, 783);
             this.Controls.Add(this.panel2);
             this.Controls.Add(this.panel1);
             this.DoubleBuffered = true;
+            this.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.Name = "TestForm";
             this.Text = "Test application";
             this.panel1.ResumeLayout(false);

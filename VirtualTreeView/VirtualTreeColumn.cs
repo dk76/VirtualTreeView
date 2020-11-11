@@ -7,10 +7,8 @@ using System.Reflection;
 
 namespace VirtualTreeView
 {
-    [Browsable(true)]
-    [SerializableAttribute]
     [TypeConverter(typeof(ExpandableObjectConverter))]
-    public class VirtualTreeColumn: ISerializable
+    public class VirtualTreeColumn
     {
 
         private string FName = "Column";
@@ -58,34 +56,11 @@ namespace VirtualTreeView
             fieldInfo = fi;
         }
 
-        protected VirtualTreeColumn(
-        SerializationInfo info, StreamingContext context)
-        {
-            Name = info.GetString("Name");
-            Width = info.GetInt32("Width");
-            LineAlignment = (StringAlignment)info.GetInt32("LineAlignment");
-            Alignment = (StringAlignment)info.GetInt32("Alignment");
-            CaptionLineAlignment = (StringAlignment)info.GetInt32("CaptionLineAlignment");
-            CaptionAlignment = (StringAlignment)info.GetInt32("CaptionAlignment");
-        }
+       
 
 
 
-        [SecurityPermissionAttribute(SecurityAction.Demand,
-         SerializationFormatter = true)]
-        public virtual void GetObjectData(
-        SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("Name", Name);
-            info.AddValue("Width",Width);
-            info.AddValue("LineAlignment", (int)LineAlignment);
-            info.AddValue("Alignment", (int)Alignment);
-            info.AddValue("CaptionLineAlignment", (int)CaptionLineAlignment);
-            info.AddValue("CaptionAlignment", (int)CaptionAlignment);
-
-
-
-        }
+       
 
 
     }

@@ -8,9 +8,7 @@ using System.ComponentModel;
 
 namespace VirtualTreeView
 {
-    [Browsable(true)]
     [TypeConverter(typeof(ExpandableObjectConverter))]
-    
     public class VirtualTreeHeader
     {
         private bool FVisible = true;
@@ -29,6 +27,7 @@ namespace VirtualTreeView
         [Category("Behavior")]
         //[TypeConverter(typeof(ExpandableObjectConverter))]
         //[DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
         public List<VirtualTreeColumn> Columns { get { return FColumns; } set { FColumns = value; } }
 
         [Category("Layout")]
