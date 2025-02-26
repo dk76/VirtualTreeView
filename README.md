@@ -7,7 +7,7 @@ VirtualTreeView is light and simple multicolumn tree.
 Install from [nuget](https://www.nuget.org/packages/VirtualTreeViewWinForms)
 
 
-Examples:
+Example:
 
 ![](/images/example3.jpg)
 
