@@ -11,4 +11,4 @@ Examples:
 
 ![](/images/example3.jpg)
 
-![](/images/example1.jpg)
+
